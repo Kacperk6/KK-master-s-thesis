@@ -35,19 +35,19 @@ class YolactFacade:
         """
         cat_index = get_cat_index(cat_name)
         if cat_index is None:
-            print("tutaj nie działa aborting")
+            print("aborting")
             return None
 
         cats, scores, boxes, masks = self.predict(frame)
         if cats is False:
             print("No object found.\naborting")
             return None
-        masks_chosen_index = np.where(cats == cat_index)
-        if len(masks_chosen_index[0]) == 0:
+        masks_cat_index = np.where(cats == cat_index)
+        if len(masks_cat_index[0]) == 0:
             print("Item not found.\naborting")
             return None
-        masks_chosen = masks[masks_chosen_index]
-        mask = self.select_mask(masks_chosen)
+        masks_cat = masks[masks_cat_index]
+        mask = self.select_mask(masks_cat)
         return mask
 
     def predict(self, img):
