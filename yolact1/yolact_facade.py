@@ -111,8 +111,7 @@ class YolactFacade:
                 size_largest = size
                 idx_largest = i
             size = 0
-        self.location = [int((boxes[idx_largest][0] + boxes[idx_largest][2]) / 2),
-                         (int(boxes[idx_largest][1] + boxes[idx_largest][3]) / 2)]
+        self.update_object_location(boxes[idx_largest])
         return masks[idx_largest]
 
     def select_mask_location(self, masks, boxes):
@@ -126,9 +125,12 @@ class YolactFacade:
             if distance < distance_closest:
                 distance_closest = distance
                 idx_closest = i
-        self.location = [int((boxes[idx_closest][0] + boxes[idx_closest][2]) / 2),
-                         (int(boxes[idx_closest][1] + boxes[idx_closest][3]) / 2)]
+        self.update_object_location(boxes[idx_closest])
         return masks[idx_closest]
+
+    def update_object_location(self, box):
+        self.location = [int((box[0] + box[2]) / 2),
+                         (int(box[1] + box[3]) / 2)]
 
     @staticmethod
     def print_classes(cats):
