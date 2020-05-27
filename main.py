@@ -4,12 +4,12 @@ from utils import camera
 
 
 def run():
-    cap = camera.get_video_live()
+    cap = camera.get_video_from_file('wiele_obiektow_640.avi')
     yolact = YolactFacade()
     while True:
         _, img = cap.read()
         cv2.imshow("img", img)
-        mask = yolact.run(img, 'person')
+        mask = yolact.run(img, 'fork')
         if mask is None:
             print("yolact.run: mask not found")
         else:
