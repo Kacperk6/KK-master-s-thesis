@@ -1,6 +1,7 @@
 import torch
 import cv2
 import numpy as np
+import logging
 
 from .yolact import Yolact
 from .data import set_cfg
@@ -38,16 +39,17 @@ class YolactFacade:
         """
         cat_index = get_cat_index(cat_name)
         if cat_index is None:
-            print("aborting")
+            logging.info("Aborting")
             return None
 
         cats, scores, boxes, masks = self.predict(frame)
+        self.log_classes(cats)
         if cats is False:
-            print("No object found.\naborting")
+            logging.info("No object found. Aborting")
             return None
         masks_cat_index = np.where(cats == cat_index)
         if len(masks_cat_index[0]) == 0:
-            print("Item not found.\naborting")
+            logging.info("Given category instance not found. Aborting")
             return None
         masks_cat = masks[masks_cat_index]
         boxes_cat = boxes[masks_cat_index]
@@ -56,7 +58,7 @@ class YolactFacade:
             self.is_first_detection = False
         else:
             mask = self.select_mask_location(masks_cat, boxes_cat)
-
+        logging.info("mask found")
         return mask
 
     def predict(self, img):
@@ -133,10 +135,11 @@ class YolactFacade:
                          (int(box[1] + box[3]) / 2)]
 
     @staticmethod
-    def print_classes(cats):
-        print("predicted classes:")
+    def log_classes(cats):
+        predicted_classes_str = ''
         for cat in cats:
-            print(COCO_CLASSES[cat])
+            predicted_classes_str += COCO_CLASSES[cat] + '\n'
+        logging.debug("predicted classes:\n{}".format(predicted_classes_str))
 
     @staticmethod
     def draw_object(frame, mask):
@@ -151,5 +154,5 @@ def get_cat_index(cat_name):
     try:
         return COCO_CLASSES.index(cat_name)
     except:
-        print("ERROR: invalid class name.")
+        logging.error("Invalid class name.")
         return None
