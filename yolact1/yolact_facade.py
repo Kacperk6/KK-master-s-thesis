@@ -138,7 +138,8 @@ class YolactFacade:
     def log_classes(cats):
         predicted_classes_str = ''
         for cat in cats:
-            predicted_classes_str += COCO_CLASSES[cat] + '\n'
+            predicted_classes_str += COCO_CLASSES[cat] + ', '
+        predicted_classes_str
         logging.debug("predicted classes:\n{}".format(predicted_classes_str))
 
     @staticmethod
@@ -154,5 +155,5 @@ def get_cat_index(cat_name):
     try:
         return COCO_CLASSES.index(cat_name)
     except:
-        logging.error("Invalid class name.")
+        logging.error("Invalid class name")
         return None

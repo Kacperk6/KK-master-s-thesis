@@ -1,10 +1,19 @@
 import cv2
 import logging
 
+WIDTH = 1280
+HEIGHT = 480
+FPS = 30
+
 
 def get_video_live():
     logging.info("getting video")
-    return cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0)
+    cap.set(3, WIDTH)
+    cap.set(4, HEIGHT)
+    cap.set(5, FPS)
+    logging.info("video parameters: resolution: {}x{}; FPS: {}".format(WIDTH, HEIGHT, FPS))
+    return cap
 
 
 def get_video_from_file(file_name):
