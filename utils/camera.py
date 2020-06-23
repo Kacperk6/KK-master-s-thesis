@@ -37,4 +37,53 @@ def split_stereo_image(stereo_image, height, width):
     logging.debug("splitting stereo image")
     frame_left = stereo_image[0:height, 0:int(width/2)]
     frame_right = stereo_image[0:height, int(width / 2): width]
-    return [frame_left, frame_right]
+    return frame_left, frame_right
+
+
+def save_video():
+    """
+    saves unedited video from camera.
+    Designed to be used independently
+    """
+    cap = get_video_live()
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('output.avi', fourcc, FPS, (WIDTH, HEIGHT))
+    cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if ret:
+            cv2.imshow("img", frame)
+            out.write(frame)
+            if cv2.waitKey(int(1000/FPS)) & 0xFF == ord('q'):
+                break
+        else:
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+def cap_frames():
+    """
+    saves frames from a video
+    """
+    i = 0
+
+    cap = cv2.VideoCapture('output.avi')
+    cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+    while cap.isOpened():
+        ret, img = cap.read()
+        if ret:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            cv2.imshow("img", img)
+            key = cv2.waitKey(int(1000 / FPS))
+            if key == ord(' '):
+                logging.info("saving image")
+                cv2.imwrite("{}.png".format(i), img)
+                img_l, img_r = split_stereo_image(img, img.shape[0], img.shape[1])
+                cv2.imwrite("../../../kamera_kalibracja/lewa/{}.png".format(i), img_l)
+                cv2.imwrite("../../../kamera_kalibracja/prawa/{}.png".format(i), img_r)
+                i += 1
+            if key == ord('q'):
+                break
+    cap.release()
+    cv2.destroyAllWindows()

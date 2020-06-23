@@ -19,8 +19,8 @@ def run():
         cv2.imshow("img", img)
         #depth_map = stereoscopy.run(img)
         #cv2.imshow("depth map", depth_map)
-
-        img = camera.split_stereo_image(img, img.shape[0], img.shape[1])[0]
+        #img_l, img_r = camera.split_stereo_image(img, img.shape[0], img.shape[1])
+        #img = img_l
         cv2.imshow("img", img)
         mask = yolact.run(img, 'person')
         if mask is None:
