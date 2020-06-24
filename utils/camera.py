@@ -132,16 +132,44 @@ def calibrate(camera_name='left'):
     logging.info("calibrating camera")
     # yes, i know it's not safe :/
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_gray.shape[::-1], None, None)
-
+    newcameramtx, _ = cv2.getOptimalNewCameraMatrix(mtx, dist, (int(WIDTH/2), HEIGHT), 0, (int(WIDTH/2), HEIGHT))
     logging.info("saving calibration data")
     path = '../config/camera_calibration/{}/'.format(camera_name)
     np.save(path + 'mtx', mtx)
     np.save(path + 'dist', dist)
     np.save(path + 'rvecs', rvecs)
     np.save(path + 'tvecs', tvecs)
+    np.save(path + 'newcameramtx', newcameramtx)
     logging.info("camera calibration finished")
     return True
 
 
+def load_calibration_data(camera_name):
+    path = '../config/camera_calibration/{}/'.format(camera_name)
+    mtx = np.load(path + 'mtx.npy')
+    dist = np.load(path + 'dist.npy')
+    rvecs = np.load(path + 'rvecs.npy')
+    tvecs = np.load(path + 'tvecs.npy')
+    newcameramtx = np.load(path + 'newcameramtx.npy')
+    return mtx, dist, rvecs, tvecs, newcameramtx
+
+
+def undistort(img, camera_name='left'):
+    mtx, dist, rvecs, tvecs, newcameramtx = load_calibration_data(camera_name)
+    img = cv2.undistort(img, mtx, dist, None, newcameramtx)
+    return img
+
+
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(message)s')
-calibrate('left')
+#calibrate('right')
+
+cap = get_video_live()
+while cap.isOpened():
+    ret, img_double = cap.read()
+    _, img = split_stereo_image(img_double, HEIGHT, WIDTH)
+    cv2.imshow('img', img)
+    img_undistorted = undistort(img, 'right')
+    cv2.imshow('img_undistorted', img_undistorted)
+    key = cv2.waitKey(int(1000/30))
+    if key == ord('q'):
+        break
