@@ -1,5 +1,8 @@
+import numpy as np
 import cv2
 import logging
+
+from utils.import_image import get_all_images
 
 WIDTH = 1280
 HEIGHT = 480
@@ -62,28 +65,83 @@ def save_video():
     cv2.destroyAllWindows()
 
 
-def cap_frames():
+def calibrate(camera_name='left'):
     """
-    saves frames from a video
+    Creates camera calibration data and saves it in files
+    :param camera_name: name of a camera to calibrate; "left" or "right"
     """
-    i = 0
+    # vertices, not squares
+    columns = 6
+    rows = 8
+    square_size = 25  # [mm]
+
+    # termination criteria
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+
+    # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
+    objp = np.zeros((columns * rows, 3), np.float32)
+    objp[:, :2] = np.mgrid[0:rows, 0:columns].T.reshape(-1, 2) * square_size
+
+    # Arrays to store object points and image points from all the images.
+    objpoints = []  # 3d point in real world space
+    imgpoints = []  # 2d points in image plane
 
     cap = cv2.VideoCapture('output.avi')
     cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+
+    # sample counter; just for user information
+    i = 0
+
     while cap.isOpened():
-        ret, img = cap.read()
+        ret, img_double = cap.read()
         if ret:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            cv2.imshow("img", img)
+            img_double_gray = cv2.cvtColor(img_double, cv2.COLOR_BGR2GRAY)
+            cv2.imshow("img", img_double_gray)
             key = cv2.waitKey(int(1000 / FPS))
             if key == ord(' '):
-                logging.info("saving image")
-                cv2.imwrite("{}.png".format(i), img)
-                img_l, img_r = split_stereo_image(img, img.shape[0], img.shape[1])
-                cv2.imwrite("../../../kamera_kalibracja/lewa/{}.png".format(i), img_l)
-                cv2.imwrite("../../../kamera_kalibracja/prawa/{}.png".format(i), img_r)
-                i += 1
+                img_l, img_r = split_stereo_image(img_double_gray, img_double_gray.shape[0], img_double_gray.shape[1])
+                if camera_name == 'left':
+                    img_gray = img_l
+                elif camera_name == 'right':
+                    img_gray = img_r
+                else:
+                    logging.info("invalid camera name")
+                    return False
+                # Find the chess board corners
+                ret, corners = cv2.findChessboardCorners(img_gray, (rows, columns), None)
+                if ret:
+                    corners2 = cv2.cornerSubPix(img_gray, corners, (11, 11), (-1, -1), criteria)
+                    # Draw and display the corners
+                    img_corners = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
+                    img_corners = cv2.drawChessboardCorners(img_corners, (rows, columns), corners2, ret)
+
+                    cv2.namedWindow('corners', cv2.WINDOW_NORMAL)
+                    cv2.imshow('corners', img_corners)
+                    key = cv2.waitKey()
+                    if key == ord('y'):
+                        objpoints.append(objp)
+                        imgpoints.append(corners2)
+                        i += 1
+                        print("number of samples: ", i)
+                cv2.destroyWindow('corners')
             if key == ord('q'):
                 break
     cap.release()
     cv2.destroyAllWindows()
+
+    logging.info("calibrating camera")
+    # yes, i know it's not safe :/
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_gray.shape[::-1], None, None)
+
+    logging.info("saving calibration data")
+    path = '../config/camera_calibration/{}/'.format(camera_name)
+    np.save(path + 'mtx', mtx)
+    np.save(path + 'dist', dist)
+    np.save(path + 'rvecs', rvecs)
+    np.save(path + 'tvecs', tvecs)
+    logging.info("camera calibration finished")
+    return True
+
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(message)s')
+calibrate('left')
