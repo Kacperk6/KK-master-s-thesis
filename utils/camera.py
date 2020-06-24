@@ -35,11 +35,25 @@ def split_stereo_image(stereo_image, height, width):
     :param stereo_image: image to split
     :param height: input image height
     :param width: input image width
-    :return: [frame_left, frame_right]: split input image
+    :return: frame_left, frame_right: split input image
     """
     logging.debug("splitting stereo image")
     frame_left = stereo_image[0:height, 0:int(width/2)]
     frame_right = stereo_image[0:height, int(width / 2): width]
+    return frame_left, frame_right
+
+
+def preprocess_stereo_image(stereo_image, height, width):
+    """
+    splits stereo image and undistorts it
+    :param stereo_image: image to split
+    :param height: input image height
+    :param width: input image width
+    :return: frame_left, frame_right: preprocessed input image
+    """
+    frame_left, frame_right = split_stereo_image(stereo_image, height, width)
+    frame_left = undistort(frame_left, 'left')
+    frame_right = undistort(frame_right, 'right')
     return frame_left, frame_right
 
 
