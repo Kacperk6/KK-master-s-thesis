@@ -1,20 +1,20 @@
 import numpy as np
 import cv2
-from matplotlib import pyplot as plt
 
-from utils import camera
+
+DEPTH_VISUALIZATION_SCALE = 2048
 
 
 class Stereoscopy:
     def __init__(self):
-        pass
+        self.stereo = cv2.StereoBM_create()
 
-    def run(self, img):
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img_l, img_r = camera.split_stereo_image(img_gray, img_gray.shape[0], img_gray.shape[1])
-        stereo = cv2.StereoBM_create(16, 15)
-        disparity = stereo.compute(img_l, img_r)
+    def run(self, img_l, img_r):
+        img_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
+        img_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
+        cv2.imshow("img_l", img_l)
+        cv2.imshow("img_r", img_r)
+
+        disparity = self.stereo.compute(img_l, img_r)
+        cv2.imshow("depth", disparity/DEPTH_VISUALIZATION_SCALE)
         return disparity
-
-    def disparity2img(self, disparity):
-        pass
