@@ -4,9 +4,18 @@ import logging
 
 from utils.import_image import get_all_images
 
+# większa rozdzielczość źle działa
 WIDTH = 1280
 HEIGHT = 480
 FPS = 30
+
+# loaded from file
+# ŁADUJE TE WARTOŚCI ZA KAŻDYM WYWOŁANIEM camera.py
+IMAGE_SIZE = 0
+MAP_L_X = 0
+MAP_L_Y = 0
+MAP_R_X = 0
+MAP_R_Y = 0
 
 
 def get_video_live():
@@ -15,7 +24,7 @@ def get_video_live():
     cap.set(3, WIDTH)
     cap.set(4, HEIGHT)
     cap.set(5, FPS)
-    logging.info("video parameters: resolution: {}x{}; FPS: {}".format(WIDTH, HEIGHT, FPS))
+    logging.info("video parameters: resolution: {}x{}; FPS: {}".format(cap.get(3), cap.get(4), cap.get(5)))
     return cap
 
 
@@ -65,7 +74,7 @@ def save_video():
     cap = get_video_live()
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter('output.avi', fourcc, FPS, (WIDTH, HEIGHT))
-    cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+    cv2.namedWindow("img", cv2.WINDOW_AUTOSIZE)
     while cap.isOpened():
         ret, frame = cap.read()
         if ret:
@@ -79,10 +88,9 @@ def save_video():
     cv2.destroyAllWindows()
 
 
-def calibrate(camera_name='left'):
+def calibrate_stereo():
     """
-    Creates camera calibration data and saves it in files
-    :param camera_name: name of a camera to calibrate; "left" or "right"
+    Creates stereo camera calibration data and saves it in file
     """
     # vertices, not squares
     columns = 6
@@ -98,10 +106,11 @@ def calibrate(camera_name='left'):
 
     # Arrays to store object points and image points from all the images.
     objpoints = []  # 3d point in real world space
-    imgpoints = []  # 2d points in image plane
+    imgpoints_l = []  # 2d points in image plane
+    imgpoints_r = []
 
     cap = cv2.VideoCapture('output.avi')
-    cv2.namedWindow("img", cv2.WINDOW_NORMAL)
+    cv2.namedWindow("img", cv2.WINDOW_AUTOSIZE)
 
     # sample counter; just for user information
     i = 0
@@ -114,61 +123,118 @@ def calibrate(camera_name='left'):
             key = cv2.waitKey(int(1000 / FPS))
             if key == ord(' '):
                 img_l, img_r = split_stereo_image(img_double_gray, img_double_gray.shape[0], img_double_gray.shape[1])
-                if camera_name == 'left':
-                    img_gray = img_l
-                elif camera_name == 'right':
-                    img_gray = img_r
-                else:
-                    logging.info("invalid camera name")
-                    return False
                 # Find the chess board corners
-                ret, corners = cv2.findChessboardCorners(img_gray, (rows, columns), None)
-                if ret:
-                    corners2 = cv2.cornerSubPix(img_gray, corners, (11, 11), (-1, -1), criteria)
+                ret_l, corners_l = cv2.findChessboardCorners(img_l, (rows, columns), None)
+                ret_r, corners_r = cv2.findChessboardCorners(img_r, (rows, columns), None)
+                if ret_l & ret_r:
+                    corners2_l = cv2.cornerSubPix(img_l, corners_l, (11, 11), (-1, -1), criteria)
+                    corners2_r = cv2.cornerSubPix(img_r, corners_r, (11, 11), (-1, -1), criteria)
                     # Draw and display the corners
-                    img_corners = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2BGR)
-                    img_corners = cv2.drawChessboardCorners(img_corners, (rows, columns), corners2, ret)
+                    img_corners_l = cv2.cvtColor(img_l, cv2.COLOR_GRAY2BGR)
+                    img_corners_l = cv2.drawChessboardCorners(img_corners_l, (rows, columns), corners2_l, ret_l)
+                    img_corners_r = cv2.cvtColor(img_r, cv2.COLOR_GRAY2BGR)
+                    img_corners_r = cv2.drawChessboardCorners(img_corners_r, (rows, columns), corners2_r, ret_r)
 
-                    cv2.namedWindow('corners', cv2.WINDOW_NORMAL)
-                    cv2.imshow('corners', img_corners)
+                    cv2.namedWindow('corners_l', cv2.WINDOW_AUTOSIZE)
+                    cv2.imshow('corners_l', img_corners_l)
+                    cv2.namedWindow('corners_r', cv2.WINDOW_AUTOSIZE)
+                    cv2.imshow('corners_r', img_corners_r)
                     key = cv2.waitKey()
                     if key == ord('y'):
                         objpoints.append(objp)
-                        imgpoints.append(corners2)
+                        imgpoints_l.append(corners2_l)
+                        imgpoints_r.append(corners2_r)
                         i += 1
                         print("number of samples: ", i)
-                cv2.destroyWindow('corners')
+                cv2.destroyWindow('corners_l')
+                cv2.destroyWindow('corners_r')
             if key == ord('q'):
                 break
+        else:
+            break
     cap.release()
     cv2.destroyAllWindows()
 
-    logging.info("calibrating camera")
+    logging.info("calibrating cameras")
     # yes, i know it's not safe :/
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_gray.shape[::-1], None, None)
-    newcameramtx, _ = cv2.getOptimalNewCameraMatrix(mtx, dist, (int(WIDTH/2), HEIGHT), 0, (int(WIDTH/2), HEIGHT))
+    ret_l, mtx_l, dist_l, rvecs_l, tvecs_l = cv2.calibrateCamera(objpoints, imgpoints_l, img_l.shape[::-1], None, None)
+    ret_r, mtx_r, dist_r, rvecs_r, tvecs_r = cv2.calibrateCamera(objpoints, imgpoints_r, img_r.shape[::-1], None, None)
+
+    (_, _, _, _, _, rotationMatrix, translationVector, _, _) = cv2.stereoCalibrate(
+        objpoints, imgpoints_l, imgpoints_r,
+        mtx_l, dist_l,
+        mtx_r, dist_r,
+        (int(WIDTH/2), HEIGHT), None, None, None, None,
+        cv2.CALIB_FIX_INTRINSIC, criteria)
+
+    (leftRectification, rightRectification, leftProjection, rightProjection,
+     dispartityToDepthMap, _, _) = cv2.stereoRectify(
+        mtx_l, dist_l,
+        mtx_r, dist_r,
+        (int(WIDTH/2), HEIGHT), rotationMatrix, translationVector,
+        None, None, None, None, None,
+        cv2.CALIB_ZERO_DISPARITY, 0)
+
+    leftMapX, leftMapY = cv2.initUndistortRectifyMap(
+        mtx_l, dist_l, leftRectification,
+        leftProjection, (int(WIDTH/2), HEIGHT), cv2.CV_32FC1)
+    rightMapX, rightMapY = cv2.initUndistortRectifyMap(
+        mtx_r, dist_r, rightRectification,
+        rightProjection, (int(WIDTH/2), HEIGHT), cv2.CV_32FC1)
+
     logging.info("saving calibration data")
-    path = '../config/camera_calibration/{}/'.format(camera_name)
-    np.save(path + 'mtx', mtx)
-    np.save(path + 'dist', dist)
-    np.save(path + 'rvecs', rvecs)
-    np.save(path + 'tvecs', tvecs)
-    np.save(path + 'newcameramtx', newcameramtx)
+    path = '../config/camera_calibration/'
+    #np.save(path + 'objpoints', objpoints)
+    np.savez_compressed(path + 'stereo', image_size=(int(WIDTH / 2), HEIGHT), map_l_x=leftMapX, map_l_y=leftMapY,
+                        map_r_x=rightMapX, map_r_y=rightMapY)
+    '''
+    path_l = path + 'left/'
+    np.save(path_l + 'mtx', mtx_l)
+    np.save(path_l + 'dist', dist_l)
+    np.save(path_l + 'rvecs', rvecs_l)
+    np.save(path_l + 'tvecs', tvecs_l)
+    np.save(path_l + 'newcameramtx', newcameramtx_l)
+    np.save(path_l + 'imgpoints', imgpoints_l)
+
+    path_r = path + 'right/'
+    np.save(path_r + 'mtx', mtx_r)
+    np.save(path_r + 'dist', dist_r)
+    np.save(path_r + 'rvecs', rvecs_r)
+    np.save(path_r + 'tvecs', tvecs_r)
+    np.save(path_r + 'newcameramtx', newcameramtx_r)
+    np.save(path_r + 'imgpoints', imgpoints_r)
+    '''
     logging.info("camera calibration finished")
     return True
 
 
-def load_calibration_data(camera_name):
-    path = 'config/camera_calibration/{}/'.format(camera_name)
+def load_calibration_data():
+    path = 'config/camera_calibration/stereo.npz'
+    calibration = np.load(path, allow_pickle=False)
+    IMAGE_SIZE = tuple(calibration["image_size"])
+    MAP_L_X = calibration["map_l_x"]
+    MAP_L_Y = calibration["map_l_y"]
+    MAP_R_X = calibration["map_r_x"]
+    MAP_R_Y = calibration["map_r_y"]
+    '''
     mtx = np.load(path + 'mtx.npy')
     dist = np.load(path + 'dist.npy')
     rvecs = np.load(path + 'rvecs.npy')
     tvecs = np.load(path + 'tvecs.npy')
     newcameramtx = np.load(path + 'newcameramtx.npy')
     return mtx, dist, rvecs, tvecs, newcameramtx
+    '''
 
 
 def undistort(img, camera_name='left'):
-    mtx, dist, rvecs, tvecs, newcameramtx = load_calibration_data(camera_name)
-    img = cv2.undistort(img, mtx, dist, None, newcameramtx)
+    if camera_name == 'left':
+        map_x = MAP_L_X
+        map_y = MAP_L_Y
+    elif camera_name == 'right':
+        map_x = MAP_R_X
+        map_y = MAP_R_Y
+    else:
+        logging.error("invalid camera name")
+        return
+    img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
     return img

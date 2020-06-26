@@ -13,11 +13,15 @@ def run():
     #cap = camera.get_video_from_file('AI_data2/str_01.avi')
     cap = camera.get_video_live()
     #yolact = YolactFacade()
-    stereoscopy = Stereoscopy()
+    #stereoscopy = Stereoscopy()
     while True:
         _, img = cap.read()
+        cv2.imshow("img", img)
+        camera.load_calibration_data()
         img_l, img_r = camera.preprocess_stereo_image(img, img.shape[0], img.shape[1])
-        depth_map = stereoscopy.run(img_l, img_r)
+        cv2.imshow("img_left_undistorted", img_l)
+        cv2.imshow("img_right_undistorted", img_r)
+        #depth_map = stereoscopy.run(img_l, img_r)
         '''
         mask = yolact.run(img, 'person')
         if mask is None:
