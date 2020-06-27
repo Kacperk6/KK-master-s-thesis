@@ -13,7 +13,7 @@ def run():
     #cap = camera.get_video_from_file('AI_data2/str_01.avi')
     cap = camera.get_video_live()
     #yolact = YolactFacade()
-    stereoscopy = Stereoscopy()
+    stereoscopy = Stereoscopy(False, False)
     while True:
         _, img = cap.read()
         cv2.imshow("img", img)

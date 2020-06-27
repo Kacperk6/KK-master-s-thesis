@@ -14,8 +14,10 @@ def nothing(x):
 
 
 class Stereoscopy:
-    def __init__(self, calibration_mode=False):
-        self.calibration_mode = calibration_mode
+    def __init__(self, calibrate_camera=False, calibrate_stereo_matching=False):
+        self.calibrate_stereo_matching = calibrate_stereo_matching
+        if calibrate_camera:
+            self.calibrate_stereo()
         self.image_size, self.map_l_x, self.map_l_y, self.map_r_x, self.map_r_y = self.load_calibration_data()
         self.stereo = cv2.StereoBM_create()
         self.stereo.setMinDisparity(4)
@@ -24,7 +26,7 @@ class Stereoscopy:
         self.stereo.setSpeckleRange(16)
         self.stereo.setSpeckleWindowSize(45)
         cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
-        if self.calibration_mode:
+        if self.calibrate_stereo_matching:
             pass
             #cv2.createTrackbar("edge minVal", "processed img", EDGE_MIN_VAL, 255, nothing)
 
@@ -101,9 +103,9 @@ class Stereoscopy:
         imgpoints_r = []
 
         cap = cv2.VideoCapture('utils/output.avi')
-        WIDTH = cap.get(3)
-        HEIGHT = cap.get(4)
-        FPS = cap.get(5)
+        WIDTH = int(cap.get(3))
+        HEIGHT = int(cap.get(4))
+        FPS = int(cap.get(5))
 
         cv2.namedWindow("img", cv2.WINDOW_AUTOSIZE)
 
@@ -117,34 +119,42 @@ class Stereoscopy:
                 cv2.imshow("img", img_double_gray)
                 key = cv2.waitKey(int(1000 / FPS))
                 if key == ord(' '):
-                    img_l, img_r = self.split_stereo_image(img_double_gray, WIDTH,
-                                                           HEIGHT)
+                    img_l, img_r = self.split_stereo_image(img_double_gray, HEIGHT, WIDTH)
                     # Find the chess board corners
                     ret_l, corners_l = cv2.findChessboardCorners(img_l, (rows, columns), None)
                     ret_r, corners_r = cv2.findChessboardCorners(img_r, (rows, columns), None)
                     if ret_l & ret_r:
                         corners2_l = cv2.cornerSubPix(img_l, corners_l, (11, 11), (-1, -1), criteria)
                         corners2_r = cv2.cornerSubPix(img_r, corners_r, (11, 11), (-1, -1), criteria)
-                        # Draw and display the corners
-                        img_corners_l = cv2.cvtColor(img_l, cv2.COLOR_GRAY2BGR)
-                        img_corners_l = cv2.drawChessboardCorners(img_corners_l, (rows, columns), corners2_l, ret_l)
-                        img_corners_r = cv2.cvtColor(img_r, cv2.COLOR_GRAY2BGR)
-                        img_corners_r = cv2.drawChessboardCorners(img_corners_r, (rows, columns), corners2_r, ret_r)
+                        while True:
+                            # Draw and display the corners
+                            img_corners_l = cv2.cvtColor(img_l, cv2.COLOR_GRAY2BGR)
+                            img_corners_l = cv2.drawChessboardCorners(img_corners_l, (rows, columns), corners2_l, ret_l)
+                            img_corners_r = cv2.cvtColor(img_r, cv2.COLOR_GRAY2BGR)
+                            img_corners_r = cv2.drawChessboardCorners(img_corners_r, (rows, columns), corners2_r, ret_r)
 
-                        cv2.namedWindow('corners_l', cv2.WINDOW_AUTOSIZE)
-                        cv2.imshow('corners_l', img_corners_l)
-                        cv2.namedWindow('corners_r', cv2.WINDOW_AUTOSIZE)
-                        cv2.imshow('corners_r', img_corners_r)
-                        key = cv2.waitKey()
-                        if key == ord('y'):
-                            objpoints.append(objp)
-                            imgpoints_l.append(corners2_l)
-                            imgpoints_r.append(corners2_r)
-                            i += 1
-                            print("number of samples: ", i)
-                    cv2.destroyWindow('corners_l')
-                    cv2.destroyWindow('corners_r')
-                if key == ord('q'):
+                            cv2.namedWindow('corners_l', cv2.WINDOW_AUTOSIZE)
+                            cv2.imshow('corners_l', img_corners_l)
+                            cv2.namedWindow('corners_r', cv2.WINDOW_AUTOSIZE)
+                            cv2.moveWindow('corners_r', 1000, 0)
+                            cv2.imshow('corners_r', img_corners_r)
+                            key = cv2.waitKey()
+                            if key == ord('y'):
+                                # accept found corners and add them to imgpoints arrays
+                                objpoints.append(objp)
+                                imgpoints_l.append(corners2_l)
+                                imgpoints_r.append(corners2_r)
+                                i += 1
+                                print("number of samples: ", i)
+                                break
+                            elif key == ord('s'):
+                                # change detected corners order for one of images, to match second image
+                                corners2_r = np.flip(corners2_r, 0)
+                            else:
+                                break
+                        cv2.destroyWindow('corners_l')
+                        cv2.destroyWindow('corners_r')
+                elif key == ord('q'):
                     break
             else:
                 break
