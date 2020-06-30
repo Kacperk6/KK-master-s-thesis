@@ -54,10 +54,10 @@ class Stereoscopy:
 
             self.calibrate_stereo_matcher()
 
-    def run(self, img):
-        img_l, img_r = self.preprocess_stereo_image(img, img.shape[0], img.shape[1])
+    def run(self, img_l, img_r):
+        img_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
+        img_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity = self.stereo.compute(img_l, img_r)
-        cv2.imshow("depth", disparity/DEPTH_VISUALIZATION_SCALE)
         return disparity
 
     def calibrate_stereo_matcher(self):
@@ -143,6 +143,7 @@ class Stereoscopy:
                     break
                 elif key == ord('q'):
                     break
+        cap.release()
         cv2.destroyWindow("depth")
 
     def load_stereo_matching_parameters(self):
@@ -184,8 +185,8 @@ class Stereoscopy:
         :return: frame_left, frame_right: preprocessed input image
         """
         frame_left, frame_right = self.split_stereo_image(stereo_image, height, width)
-        frame_left = cv2.cvtColor(frame_left, cv2.COLOR_BGR2GRAY)
-        frame_right = cv2.cvtColor(frame_right, cv2.COLOR_BGR2GRAY)
+        #frame_left = cv2.cvtColor(frame_left, cv2.COLOR_BGR2GRAY)
+        #frame_right = cv2.cvtColor(frame_right, cv2.COLOR_BGR2GRAY)
         frame_left, frame_right = self.undistort(frame_left, frame_right)
         return frame_left, frame_right
 

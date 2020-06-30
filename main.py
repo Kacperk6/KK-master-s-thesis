@@ -15,9 +15,12 @@ def run():
     cap = camera.get_video_live()
     #yolact = YolactFacade()
     while True:
-        _, img = cap.read()
-        #cv2.imshow("img", img)
-        depth_map = stereoscopy.run(img)
+        _, img_double = cap.read()
+        img_l, img_r = stereoscopy.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
+        cv2.imshow("img_l", img_l)
+        depth_map = stereoscopy.run(img_l, img_r)
+        depth_map_img = depth_map/2048
+        cv2.imshow("depth", depth_map_img)
         '''
         mask = yolact.run(img, 'person')
         if mask is None:
@@ -25,8 +28,12 @@ def run():
         else:
             yolact.draw_object(img, mask)
         '''
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        key = cv2.waitKey(1)
+        if key == ord('q'):
             break
+        elif key == ord(' '):
+            cv2.imwrite('img_l.png', img_l)
+            cv2.imwrite('depth.png', depth_map_img)
     cap.release()
     cv2.destroyAllWindows()
 
