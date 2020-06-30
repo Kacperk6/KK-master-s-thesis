@@ -11,9 +11,9 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(fun
 def run():
     logging.info("program started")
     #cap = camera.get_video_from_file('AI_data2/str_01.avi')
+    stereoscopy = Stereoscopy()
     cap = camera.get_video_live()
     #yolact = YolactFacade()
-    stereoscopy = Stereoscopy(False, True)
     while True:
         _, img = cap.read()
         #cv2.imshow("img", img)

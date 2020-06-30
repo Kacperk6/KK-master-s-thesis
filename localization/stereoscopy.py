@@ -3,6 +3,9 @@ import cv2
 import logging
 
 
+from utils import camera
+
+
 DEPTH_VISUALIZATION_SCALE = 2048
 
 
@@ -17,7 +20,7 @@ class Stereoscopy:
     def __init__(self, calibrate_camera=False, calibrate_stereo_matching=False):
         self.calibrate_stereo_matching = calibrate_stereo_matching
         if calibrate_camera:
-            self.calibrate_stereo()
+            self.calibrate_camera()
         self.image_size, self.map_l_x, self.map_l_y, self.map_r_x, self.map_r_y = self.load_calibration_data()
         '''
         self.stereo.setMinDisparity(4)
@@ -26,36 +29,13 @@ class Stereoscopy:
         self.stereo.setSpeckleRange(16)
         self.stereo.setSpeckleWindowSize(45)
         '''
-        # 0 or less
-        self.minDisparity = 0
-        # number of depth levels, dividable by 16
-        self.numDisparities = 128
-        # matched block size, odd number, usually in 3-11 range
-        self.blockSize = 7
-        # disparity smoothness parameter
-        # penalty on disparity change by +/- 1 between neighbor pixels
-        # equation from opencv docs
-        self.p1 = 8 * (self.blockSize**2)
-        # disparity smoothness parameter
-        # penalty on disparity change by more than +/- 1 between neighbor pixels
-        # p2>p1, equation from opencv docs
-        self.p2 = 32 * (self.blockSize**2)
-        # maximum difference in left-right disparity check; <0 to disable
-        self.displ2MaxDiff = 10
-        # threshold for prefiltered pixels
-        self.preFilterCap = 10
-        # % by which best score must be better than next one to be considered correct, usually in 5-15 range
-        self.uniquenessRatio = 10
-        # max size of smooth region to consider speckle and invalidate
-        # usually in 50-100 range, 0 to disable
-        self.speckleWindowSize = 100
-        # max disparity variation inside a speckle
-        # usually 1 or 2, implicitly multiplied by 16
-        self.speckleRange = 1
-        # enable full-scale two-pass dynamic programming algorithm, consumes great amount of memory
-        self.fullDP = False
+        # load stereo matching parameters from file
+        self.minDisparity, self.numDisparities, self.blockSize, self.p1, self.p2, self.disp12MaxDiff,\
+            self.preFilterCap, self.uniquenessRatio, self.speckleWindowSize, self.speckleRange, self.fullDP\
+            = self.load_stereo_matching_parameters()
+
         self.stereo = cv2.StereoSGBM_create(self.minDisparity, self.numDisparities, self.blockSize, self.p1, self.p2,
-                                            self.displ2MaxDiff, self.preFilterCap, self.uniquenessRatio,
+                                            self.disp12MaxDiff, self.preFilterCap, self.uniquenessRatio,
                                             self.speckleWindowSize, self.speckleRange, self.fullDP)
 
         cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
@@ -65,74 +45,105 @@ class Stereoscopy:
             cv2.createTrackbar("blockSize x 2 + 1", "depth", self.blockSize, 15, nothing)
             cv2.createTrackbar("p1", "depth", self.p1, 2000, nothing)
             cv2.createTrackbar("p2", "depth", self.p2, 5000, nothing)
-            cv2.createTrackbar("displ2MaxDiff", "depth", self.displ2MaxDiff, 500, nothing)
+            cv2.createTrackbar("disp12MaxDiff", "depth", self.disp12MaxDiff, 500, nothing)
             cv2.createTrackbar("preFilterCap", "depth", self.preFilterCap, 50, nothing)
             cv2.createTrackbar("uniquenessRatio", "depth", self.uniquenessRatio, 30, nothing)
-            cv2.createTrackbar("speckleWindowSize", "depth", self.speckleWindowSize, 200, nothing)
+            cv2.createTrackbar("speckleWindowSize", "depth", self.speckleWindowSize, 500, nothing)
             cv2.createTrackbar("speckleRange", "depth", self.speckleRange, 5, nothing)
             cv2.createTrackbar("fullDP", "depth", self.fullDP, 1, nothing)
 
+            self.calibrate_stereo_matcher()
+
     def run(self, img):
         img_l, img_r = self.preprocess_stereo_image(img, img.shape[0], img.shape[1])
-        #cv2.imshow("img_l", img_l)
-        if self.calibrate_stereo_matching:
-            self.update_stereo_matcher()
         disparity = self.stereo.compute(img_l, img_r)
         cv2.imshow("depth", disparity/DEPTH_VISUALIZATION_SCALE)
         return disparity
 
-    def update_stereo_matcher(self):
-        correct_parameters = True
-        minDisparity = - cv2.getTrackbarPos("minDisparity x (-1)", "depth")
-        numDisparities = 16 * cv2.getTrackbarPos("numDisparities x 16", "depth")
-        if numDisparities < 1:
-            logging.error("number of disparity levels must be > 0")
-            correct_parameters = False
-        blockSize = 2 * cv2.getTrackbarPos("blockSize x 2 + 1", "depth") + 1
-        p1 = cv2.getTrackbarPos("p1", "depth")
-        p2 = cv2.getTrackbarPos("p2", "depth")
-        if p2 < p1:
-            logging.error("p2 must be greater than p1")
-            correct_parameters = False
-        displ2MaxDiff = cv2.getTrackbarPos("displ2MaxDiff", "depth")
-        preFilterCap = - cv2.getTrackbarPos("preFilterCap", "depth")
-        uniquenessRatio = cv2.getTrackbarPos("uniquenessRatio", "depth")
-        speckleWindowSize = cv2.getTrackbarPos("speckleWindowSize", "depth")
-        speckleRange = cv2.getTrackbarPos("speckleRange", "depth")
-        fullDP = - cv2.getTrackbarPos("fullDP", "depth")
+    def calibrate_stereo_matcher(self):
+        cap = camera.get_video_live()
+        cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
 
-        if correct_parameters:
-            self.stereo.setMinDisparity(minDisparity)
-            self.stereo.setNumDisparities(numDisparities)
-            self.stereo.setBlockSize(blockSize)
-            self.stereo.setP1(p1)
-            self.stereo.setP2(p2)
-            self.stereo.setDisp12MaxDiff(displ2MaxDiff)
-            self.stereo.setPreFilterCap(preFilterCap)
-            self.stereo.setUniquenessRatio(uniquenessRatio)
-            self.stereo.setSpeckleWindowSize(speckleWindowSize)
-            self.stereo.setSpeckleRange(speckleRange)
-            self.stereo.setMode(fullDP)
+        while cap.isOpened():
+            ret, img_double = cap.read()
+            img_l, img_r = self.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
+            if ret:
+                correct_parameters = True
+                # 0 or less
+                minDisparity = - cv2.getTrackbarPos("minDisparity x (-1)", "depth")
+                # number of depth levels, dividable by 16
+                numDisparities = 16 * cv2.getTrackbarPos("numDisparities x 16", "depth")
+                if numDisparities < 1:
+                    logging.error("number of disparity levels must be > 0")
+                    correct_parameters = False
+                # matched block size, odd number, usually in 3-11 range
+                blockSize = 2 * cv2.getTrackbarPos("blockSize x 2 + 1", "depth") + 1
+                # disparity smoothness parameter
+                # penalty on disparity change by +/- 1 between neighbor pixels
+                p1 = cv2.getTrackbarPos("p1", "depth")
+                # disparity smoothness parameter
+                # penalty on disparity change by more than +/- 1 between neighbor pixels
+                # p2 > p1
+                p2 = cv2.getTrackbarPos("p2", "depth")
+                if p2 < p1:
+                    logging.error("p2 must be greater than p1")
+                    correct_parameters = False
+                # maximum difference in left-right disparity check; <0 to disable
+                disp12MaxDiff = cv2.getTrackbarPos("disp12MaxDiff", "depth")
+                # threshold for prefiltered pixels
+                preFilterCap = - cv2.getTrackbarPos("preFilterCap", "depth")
+                # % by which best score must be better than next one to be considered correct, usually in 5-15 range
+                uniquenessRatio = cv2.getTrackbarPos("uniquenessRatio", "depth")
+                # max size of smooth region to consider speckle and invalidate
+                # usually in 50-100 range, 0 to disable
+                speckleWindowSize = cv2.getTrackbarPos("speckleWindowSize", "depth")
+                # max disparity variation inside a speckle
+                # usually 1 or 2, implicitly multiplied by 16
+                speckleRange = cv2.getTrackbarPos("speckleRange", "depth")
+                # enable full-scale two-pass dynamic programming algorithm, consumes great amount of memory
+                fullDP = - cv2.getTrackbarPos("fullDP", "depth")
 
-        key = cv2.waitKey(1)
-        if key == ord('y'):
-            np.savez_compressed('config/stereo_matching_parameters/SGBM', minDisparity=minDisparity,
-                                numDisparities=numDisparities, blockSize=blockSize, p1=p1, p2=p2,
-                                displ2MaxDiff=displ2MaxDiff, preFilterCap=preFilterCap, uniquenessRatio=uniquenessRatio,
-                                speckleWindowSize=speckleWindowSize, speckleRange=speckleRange, fullDP=fullDP)
-            self.calibrate_stereo_matching = False
+                if correct_parameters:
+                    self.stereo.setMinDisparity(minDisparity)
+                    self.stereo.setNumDisparities(numDisparities)
+                    self.stereo.setBlockSize(blockSize)
+                    self.stereo.setP1(p1)
+                    self.stereo.setP2(p2)
+                    self.stereo.setDisp12MaxDiff(disp12MaxDiff)
+                    self.stereo.setPreFilterCap(preFilterCap)
+                    self.stereo.setUniquenessRatio(uniquenessRatio)
+                    self.stereo.setSpeckleWindowSize(speckleWindowSize)
+                    self.stereo.setSpeckleRange(speckleRange)
+                    self.stereo.setMode(fullDP)
 
-            self.minDisparity = minDisparity
-            self.numDisparities = numDisparities
-            self.blockSize = blockSize
-            self.p1 = p1
-            self.p2 = p2
-            self.displ2MaxDiff = displ2MaxDiff
-            self.preFilterCap = preFilterCap
-            self.uniquenessRatio = uniquenessRatio
-            self.speckleWindowSize = speckleWindowSize
-            self.speckleRange = speckleRange
-            self.fullDP = fullDP
+                print(self.stereo.getSpeckleWindowSize())
+                disparity = self.stereo.compute(img_l, img_r)
+                cv2.imshow("depth", disparity / DEPTH_VISUALIZATION_SCALE)
+
+                key = cv2.waitKey(int(1000/cap.get(5)))
+                if key == ord('y') and correct_parameters:
+                    np.savez_compressed('config/stereo_matching_parameters/SGBM', minDisparity=minDisparity,
+                                        numDisparities=numDisparities, blockSize=blockSize, p1=p1, p2=p2,
+                                        disp12MaxDiff=disp12MaxDiff, preFilterCap=preFilterCap,
+                                        uniquenessRatio=uniquenessRatio,
+                                        speckleWindowSize=speckleWindowSize, speckleRange=speckleRange, fullDP=fullDP)
+                    self.calibrate_stereo_matching = False
+
+                    self.minDisparity = minDisparity
+                    self.numDisparities = numDisparities
+                    self.blockSize = blockSize
+                    self.p1 = p1
+                    self.p2 = p2
+                    self.disp12MaxDiff = disp12MaxDiff
+                    self.preFilterCap = preFilterCap
+                    self.uniquenessRatio = uniquenessRatio
+                    self.speckleWindowSize = speckleWindowSize
+                    self.speckleRange = speckleRange
+                    self.fullDP = fullDP
+                    break
+                elif key == ord('q'):
+                    break
+        cv2.destroyWindow("depth")
 
     def load_stereo_matching_parameters(self):
         path = 'config/stereo_matching_parameters/SGBM.npz'
@@ -142,13 +153,13 @@ class Stereoscopy:
         blockSize = parameters['blockSize']
         p1 = parameters['p1']
         p2 = parameters['p2']
-        displ2MaxDiff = parameters['displ2MaxDiff']
+        disp12MaxDiff = parameters['disp12MaxDiff']
         preFilterCap = parameters['preFilterCap']
         uniquenessRatio = parameters['uniquenessRatio']
         speckleWindowSize = parameters['speckleWindowSize']
         speckleRange = parameters['speckleRange']
         fullDP = parameters['fullDP']
-        return minDisparity, numDisparities, blockSize, p1, p2, displ2MaxDiff, preFilterCap, uniquenessRatio,\
+        return minDisparity, numDisparities, blockSize, p1, p2, disp12MaxDiff, preFilterCap, uniquenessRatio,\
                speckleWindowSize, speckleRange, fullDP
 
     def split_stereo_image(self, stereo_image, height, width):
@@ -193,7 +204,7 @@ class Stereoscopy:
         map_r_y = calibration["map_r_y"]
         return image_size, map_l_x, map_l_y, map_r_x, map_r_y
 
-    def calibrate_stereo(self):
+    def calibrate_camera(self):
         """
         Creates stereo camera calibration data and saves it in file
         """
