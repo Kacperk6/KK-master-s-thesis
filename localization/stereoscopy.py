@@ -21,7 +21,7 @@ class Stereoscopy:
         self.calibrate_stereo_matching = calibrate_stereo_matching
         if calibrate_camera:
             self.calibrate_camera()
-        self.image_size, self.map_l_x, self.map_l_y, self.map_r_x, self.map_r_y = self.load_calibration_data()
+        self.image_size, self.map_l_x, self.map_l_y, self.map_r_x, self.map_r_y, self.Q = self.load_calibration_data()
         '''
         self.stereo.setMinDisparity(4)
         self.stereo.setNumDisparities(128)
@@ -40,9 +40,9 @@ class Stereoscopy:
 
         cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
         if self.calibrate_stereo_matching:
-            cv2.createTrackbar("minDisparity x (-1)", "depth", self.minDisparity, 100, nothing)
-            cv2.createTrackbar("numDisparities x 16", "depth", self.numDisparities, 20, nothing)
-            cv2.createTrackbar("blockSize x 2 + 1", "depth", self.blockSize, 15, nothing)
+            cv2.createTrackbar("minDisparity x (-1)", "depth", -self.minDisparity, 100, nothing)
+            cv2.createTrackbar("numDisparities x 16", "depth", int(self.numDisparities/16), 20, nothing)
+            cv2.createTrackbar("blockSize x 2 + 1", "depth", int(self.blockSize/2), 15, nothing)
             cv2.createTrackbar("p1", "depth", self.p1, 2000, nothing)
             cv2.createTrackbar("p2", "depth", self.p2, 5000, nothing)
             cv2.createTrackbar("disp12MaxDiff", "depth", self.disp12MaxDiff, 500, nothing)
@@ -58,16 +58,21 @@ class Stereoscopy:
         img_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
         img_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity = self.stereo.compute(img_l, img_r)
+        #img_3d = cv2.reprojectImageTo3D(disparity, self.Q)
         return disparity
 
     def calibrate_stereo_matcher(self):
-        cap = camera.get_video_live()
+        #cap = camera.get_video_live()
         cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
 
-        while cap.isOpened():
-            ret, img_double = cap.read()
-            img_l, img_r = self.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
-            if ret:
+        while True:
+        #while cap.isOpened():
+            #ret, img_double = cap.read()
+            #img_l, img_r = self.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
+            img_l = cv2.cvtColor(cv2.imread('img_l.png'), cv2.COLOR_BGR2GRAY)
+            img_r = cv2.cvtColor(cv2.imread('img_r.png'), cv2.COLOR_BGR2GRAY)
+            if True:
+            #if ret:
                 correct_parameters = True
                 # 0 or less
                 minDisparity = - cv2.getTrackbarPos("minDisparity x (-1)", "depth")
@@ -116,11 +121,13 @@ class Stereoscopy:
                     self.stereo.setSpeckleRange(speckleRange)
                     self.stereo.setMode(fullDP)
 
-                print(self.stereo.getSpeckleWindowSize())
                 disparity = self.stereo.compute(img_l, img_r)
-                cv2.imshow("depth", disparity / DEPTH_VISUALIZATION_SCALE)
+                disparity_visualiztion = disparity / DEPTH_VISUALIZATION_SCALE
+                #disparity_visualiztion = cv2.normalize(disparity, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
+                cv2.imshow("depth", disparity_visualiztion)
 
-                key = cv2.waitKey(int(1000/cap.get(5)))
+                #key = cv2.waitKey(int(1000/cap.get(5)))
+                key = cv2.waitKey()
                 if key == ord('y') and correct_parameters:
                     np.savez_compressed('config/stereo_matching_parameters/SGBM', minDisparity=minDisparity,
                                         numDisparities=numDisparities, blockSize=blockSize, p1=p1, p2=p2,
@@ -141,9 +148,13 @@ class Stereoscopy:
                     self.speckleRange = speckleRange
                     self.fullDP = fullDP
                     break
+                elif key == ord('s'):
+                    print("enter image name: ")
+                    file_name = input()
+                    cv2.imwrite(file_name+'.png', disparity_visualiztion)
                 elif key == ord('q'):
                     break
-        cap.release()
+        #cap.release()
         cv2.destroyWindow("depth")
 
     def load_stereo_matching_parameters(self):
@@ -203,7 +214,8 @@ class Stereoscopy:
         map_l_y = calibration["map_l_y"]
         map_r_x = calibration["map_r_x"]
         map_r_y = calibration["map_r_y"]
-        return image_size, map_l_x, map_l_y, map_r_x, map_r_y
+        Q = calibration["Q"]
+        return image_size, map_l_x, map_l_y, map_r_x, map_r_y, Q
 
     def calibrate_camera(self):
         """
@@ -318,7 +330,7 @@ class Stereoscopy:
         path = 'config/camera_calibration/'
         # np.save(path + 'objpoints', objpoints)
         np.savez_compressed(path + 'stereo', image_size=(int(WIDTH / 2), HEIGHT), map_l_x=leftMapX, map_l_y=leftMapY,
-                            map_r_x=rightMapX, map_r_y=rightMapY)
+                            map_r_x=rightMapX, map_r_y=rightMapY, Q=dispartityToDepthMap)
         '''
         path_l = path + 'left/'
         np.save(path_l + 'mtx', mtx_l)
