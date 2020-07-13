@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import logging
+import open3d as o3d
 
 
 from utils import camera
@@ -58,7 +59,8 @@ class Stereoscopy:
         img_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
         img_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity = self.stereo.compute(img_l, img_r)
-        #img_3d = cv2.reprojectImageTo3D(disparity, self.Q)
+        disparity = disparity.astype('float32')
+        #disparity = disparity/16
         return disparity
 
     def calibrate_stereo_matcher(self):
@@ -350,3 +352,16 @@ class Stereoscopy:
         '''
         logging.info("camera calibration finished")
         return True
+
+    def make_point_cloud(self, disparity_map, img):
+        points_3d = cv2.reprojectImageTo3D(disparity_map, self.Q)
+        colors = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype('float')/255
+        mask_map = disparity_map > disparity_map.min()
+        output_points = points_3d[mask_map]
+        output_points[np.isinf(output_points)] = np.nan
+        output_colors = colors[mask_map]
+        logging.info("creating point cloud file")
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(output_points)
+        pcd.colors = o3d.Vector3dVector(output_colors)
+        o3d.visualization.draw_geometries([pcd])

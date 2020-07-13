@@ -38,6 +38,8 @@ def run():
         elif key == ord(' '):
             cv2.imwrite('img_l.png', img_l)
             cv2.imwrite("img_r.png", img_r)
+        elif key == ord('p'):
+            stereoscopy.make_point_cloud(depth_map, img_l)
     cap.release()
     cv2.destroyAllWindows()
 
