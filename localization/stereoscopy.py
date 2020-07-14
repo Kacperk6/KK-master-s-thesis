@@ -41,7 +41,7 @@ class Stereoscopy:
 
         cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
         if self.calibrate_stereo_matching:
-            cv2.createTrackbar("minDisparity x (-1)", "depth", -self.minDisparity, 100, nothing)
+            cv2.createTrackbar("minDisparity", "depth", self.minDisparity, 100, nothing)
             cv2.createTrackbar("numDisparities x 16", "depth", int(self.numDisparities/16), 20, nothing)
             cv2.createTrackbar("blockSize x 2 + 1", "depth", int(self.blockSize/2), 15, nothing)
             cv2.createTrackbar("p1", "depth", self.p1, 2000, nothing)
@@ -59,103 +59,95 @@ class Stereoscopy:
         img_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
         img_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity = self.stereo.compute(img_l, img_r)
-        disparity = disparity.astype('float32')
-        #disparity = disparity/16
-        return disparity
+        disparity = disparity.astype('float32')/16
+        points_3d = cv2.reprojectImageTo3D(disparity, self.Q)
+        return disparity, points_3d
 
     def calibrate_stereo_matcher(self):
-        #cap = camera.get_video_live()
-        cv2.namedWindow("depth", cv2.WINDOW_AUTOSIZE)
-
+        img_l_color = cv2.imread('img_l.png')
+        img_l = cv2.cvtColor(img_l_color, cv2.COLOR_BGR2GRAY)
+        img_r = cv2.cvtColor(cv2.imread('img_r.png'), cv2.COLOR_BGR2GRAY)
         while True:
-        #while cap.isOpened():
-            #ret, img_double = cap.read()
-            #img_l, img_r = self.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
-            img_l = cv2.cvtColor(cv2.imread('img_l.png'), cv2.COLOR_BGR2GRAY)
-            img_r = cv2.cvtColor(cv2.imread('img_r.png'), cv2.COLOR_BGR2GRAY)
-            if True:
-            #if ret:
-                correct_parameters = True
-                # 0 or less
-                minDisparity = - cv2.getTrackbarPos("minDisparity x (-1)", "depth")
-                # number of depth levels, dividable by 16
-                numDisparities = 16 * cv2.getTrackbarPos("numDisparities x 16", "depth")
-                if numDisparities < 1:
-                    logging.error("number of disparity levels must be > 0")
-                    correct_parameters = False
-                # matched block size, odd number, usually in 3-11 range
-                blockSize = 2 * cv2.getTrackbarPos("blockSize x 2 + 1", "depth") + 1
-                # disparity smoothness parameter
-                # penalty on disparity change by +/- 1 between neighbor pixels
-                p1 = cv2.getTrackbarPos("p1", "depth")
-                # disparity smoothness parameter
-                # penalty on disparity change by more than +/- 1 between neighbor pixels
-                # p2 > p1
-                p2 = cv2.getTrackbarPos("p2", "depth")
-                if p2 < p1:
-                    logging.error("p2 must be greater than p1")
-                    correct_parameters = False
-                # maximum difference in left-right disparity check; <0 to disable
-                disp12MaxDiff = cv2.getTrackbarPos("disp12MaxDiff", "depth")
-                # threshold for prefiltered pixels
-                preFilterCap = - cv2.getTrackbarPos("preFilterCap", "depth")
-                # % by which best score must be better than next one to be considered correct, usually in 5-15 range
-                uniquenessRatio = cv2.getTrackbarPos("uniquenessRatio", "depth")
-                # max size of smooth region to consider speckle and invalidate
-                # usually in 50-100 range, 0 to disable
-                speckleWindowSize = cv2.getTrackbarPos("speckleWindowSize", "depth")
-                # max disparity variation inside a speckle
-                # usually 1 or 2, implicitly multiplied by 16
-                speckleRange = cv2.getTrackbarPos("speckleRange", "depth")
-                # enable full-scale two-pass dynamic programming algorithm, consumes great amount of memory
-                fullDP = - cv2.getTrackbarPos("fullDP", "depth")
+            correct_parameters = True
+            # 0 or less
+            minDisparity = cv2.getTrackbarPos("minDisparity", "depth")
+            # number of depth levels, dividable by 16
+            numDisparities = 16 * cv2.getTrackbarPos("numDisparities x 16", "depth")
+            if numDisparities < 1:
+                logging.error("number of disparity levels must be > 0")
+                correct_parameters = False
+            # matched block size, odd number, usually in 3-11 range
+            blockSize = 2 * cv2.getTrackbarPos("blockSize x 2 + 1", "depth") + 1
+            # disparity smoothness parameter
+            # penalty on disparity change by +/- 1 between neighbor pixels
+            p1 = cv2.getTrackbarPos("p1", "depth")
+            # disparity smoothness parameter
+            # penalty on disparity change by more than +/- 1 between neighbor pixels
+            # p2 > p1
+            p2 = cv2.getTrackbarPos("p2", "depth")
+            if p2 < p1:
+                logging.error("p2 must be greater than p1")
+                correct_parameters = False
+            # maximum difference in left-right disparity check; <0 to disable
+            disp12MaxDiff = cv2.getTrackbarPos("disp12MaxDiff", "depth")
+            # threshold for prefiltered pixels
+            preFilterCap = - cv2.getTrackbarPos("preFilterCap", "depth")
+            # % by which best score must be better than next one to be considered correct, usually in 5-15 range
+            uniquenessRatio = cv2.getTrackbarPos("uniquenessRatio", "depth")
+            # max size of smooth region to consider speckle and invalidate
+            # usually in 50-100 range, 0 to disable
+            speckleWindowSize = cv2.getTrackbarPos("speckleWindowSize", "depth")
+            # max disparity variation inside a speckle
+            # usually 1 or 2, implicitly multiplied by 16
+            speckleRange = cv2.getTrackbarPos("speckleRange", "depth")
+            # enable full-scale two-pass dynamic programming algorithm, consumes great amount of memory
+            fullDP = - cv2.getTrackbarPos("fullDP", "depth")
 
-                if correct_parameters:
-                    self.stereo.setMinDisparity(minDisparity)
-                    self.stereo.setNumDisparities(numDisparities)
-                    self.stereo.setBlockSize(blockSize)
-                    self.stereo.setP1(p1)
-                    self.stereo.setP2(p2)
-                    self.stereo.setDisp12MaxDiff(disp12MaxDiff)
-                    self.stereo.setPreFilterCap(preFilterCap)
-                    self.stereo.setUniquenessRatio(uniquenessRatio)
-                    self.stereo.setSpeckleWindowSize(speckleWindowSize)
-                    self.stereo.setSpeckleRange(speckleRange)
-                    self.stereo.setMode(fullDP)
+            key = cv2.waitKey()
 
-                disparity = self.stereo.compute(img_l, img_r)
-                disparity_visualiztion = disparity / DEPTH_VISUALIZATION_SCALE
-                #disparity_visualiztion = cv2.normalize(disparity, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
-                cv2.imshow("depth", disparity_visualiztion)
+            if correct_parameters:
+                self.stereo.setMinDisparity(minDisparity)
+                self.stereo.setNumDisparities(numDisparities)
+                self.stereo.setBlockSize(blockSize)
+                self.stereo.setP1(p1)
+                self.stereo.setP2(p2)
+                self.stereo.setDisp12MaxDiff(disp12MaxDiff)
+                self.stereo.setPreFilterCap(preFilterCap)
+                self.stereo.setUniquenessRatio(uniquenessRatio)
+                self.stereo.setSpeckleWindowSize(speckleWindowSize)
+                self.stereo.setSpeckleRange(speckleRange)
+                self.stereo.setMode(fullDP)
 
-                #key = cv2.waitKey(int(1000/cap.get(5)))
-                key = cv2.waitKey()
-                if key == ord('y') and correct_parameters:
-                    np.savez_compressed('config/stereo_matching_parameters/SGBM', minDisparity=minDisparity,
-                                        numDisparities=numDisparities, blockSize=blockSize, p1=p1, p2=p2,
-                                        disp12MaxDiff=disp12MaxDiff, preFilterCap=preFilterCap,
-                                        uniquenessRatio=uniquenessRatio,
-                                        speckleWindowSize=speckleWindowSize, speckleRange=speckleRange, fullDP=fullDP)
-                    self.calibrate_stereo_matching = False
+            disparity = self.stereo.compute(img_l, img_r)
+            disparity_visualiztion = disparity / DEPTH_VISUALIZATION_SCALE
+            # disparity_visualiztion = cv2.normalize(disparity, None, 0, 1, cv2.NORM_MINMAX, cv2.CV_32F)
+            cv2.imshow("depth", disparity_visualiztion)
+            if key == ord('p'):
+                self.make_point_cloud(disparity, img_l_color)
+            # key = cv2.waitKey(int(1000/cap.get(5)))
 
-                    self.minDisparity = minDisparity
-                    self.numDisparities = numDisparities
-                    self.blockSize = blockSize
-                    self.p1 = p1
-                    self.p2 = p2
-                    self.disp12MaxDiff = disp12MaxDiff
-                    self.preFilterCap = preFilterCap
-                    self.uniquenessRatio = uniquenessRatio
-                    self.speckleWindowSize = speckleWindowSize
-                    self.speckleRange = speckleRange
-                    self.fullDP = fullDP
-                    break
-                elif key == ord('s'):
-                    print("enter image name: ")
-                    file_name = input()
-                    cv2.imwrite(file_name+'.png', disparity_visualiztion)
-                elif key == ord('q'):
-                    break
+            if key == ord('y') and correct_parameters:
+                np.savez_compressed('config/stereo_matching_parameters/SGBM', minDisparity=minDisparity,
+                                    numDisparities=numDisparities, blockSize=blockSize, p1=p1, p2=p2,
+                                    disp12MaxDiff=disp12MaxDiff, preFilterCap=preFilterCap,
+                                    uniquenessRatio=uniquenessRatio,
+                                    speckleWindowSize=speckleWindowSize, speckleRange=speckleRange, fullDP=fullDP)
+                self.calibrate_stereo_matching = False
+
+                self.minDisparity = minDisparity
+                self.numDisparities = numDisparities
+                self.blockSize = blockSize
+                self.p1 = p1
+                self.p2 = p2
+                self.disp12MaxDiff = disp12MaxDiff
+                self.preFilterCap = preFilterCap
+                self.uniquenessRatio = uniquenessRatio
+                self.speckleWindowSize = speckleWindowSize
+                self.speckleRange = speckleRange
+                self.fullDP = fullDP
+                break
+            elif key == ord('q'):
+                break
         #cap.release()
         cv2.destroyWindow("depth")
 
@@ -353,15 +345,26 @@ class Stereoscopy:
         logging.info("camera calibration finished")
         return True
 
-    def make_point_cloud(self, disparity_map, img):
-        points_3d = cv2.reprojectImageTo3D(disparity_map, self.Q)
+    def draw_point_cloud(self, points_3d, disparity_map, img):
+        #DISTANCE_LIMIT = 2000
+
+        #logging.info("saving points_3d")
+        #np.savez_compressed('point_cloud', points_3d=points_3d, disparity_map=disparity_map, img=img)
         colors = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype('float')/255
         mask_map = disparity_map > disparity_map.min()
         output_points = points_3d[mask_map]
-        output_points[np.isinf(output_points)] = np.nan
+        #output_points[np.isinf(output_points)] = np.nan
+        #output_points[output_points[:, 2] > DISTANCE_LIMIT] = np.nan
         output_colors = colors[mask_map]
         logging.info("creating point cloud file")
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(output_points)
         pcd.colors = o3d.Vector3dVector(output_colors)
         o3d.visualization.draw_geometries([pcd])
+
+    def mask_3d(self, mask, points_3d, disparity_map, img):
+        mask_3d = mask[:, :, np.newaxis]
+        points_3d = np.where(mask_3d, points_3d, np.nan)
+        disparity_map = np.where(mask, disparity_map, disparity_map.min())
+        img = np.where(mask_3d, img, 0)
+        return points_3d, disparity_map, img

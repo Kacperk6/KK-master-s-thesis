@@ -11,35 +11,37 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(fun
 def run():
     logging.info("program started")
 
-    #yolact = YolactFacade()
+    yolact = YolactFacade()
     stereoscopy = Stereoscopy()
 
     cap = camera.get_video_live()
-    #cap = camera.get_video_from_file('output1.avi')
+    #cap = camera.get_video_from_file('poczestuj_sie.avi')
     while True:
         _, img_double = cap.read()
-        img_l_dist, img_r_dist = stereoscopy.split_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
+        #img_l_dist, img_r_dist = stereoscopy.split_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
         img_l, img_r = stereoscopy.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
         cv2.imshow("img_l", img_l)
-        cv2.imshow("img_r", img_r)
-        depth_map = stereoscopy.run(img_l, img_r)
-        depth_map_img = depth_map/2048
-        cv2.imshow("depth", depth_map_img)
-        '''
-        mask = yolact.run(img_l, 'person')
+
+        mask = yolact.run(img_l, 'cup')
         if mask is None:
             logging.info("mask not found")
         else:
             yolact.draw_object(img_l, mask)
-        '''
+
         key = cv2.waitKey(1)
         if key == ord('q'):
             break
         elif key == ord(' '):
             cv2.imwrite('img_l.png', img_l)
             cv2.imwrite("img_r.png", img_r)
-        elif key == ord('p'):
-            stereoscopy.make_point_cloud(depth_map, img_l)
+        elif key == ord('d'):
+            depth_map, points_3d = stereoscopy.run(img_l, img_r)
+            if mask is not None:
+                points_3d, depth_map, img_l = stereoscopy.mask_3d(mask, points_3d, depth_map, img_l)
+            depth_map_img = depth_map / 128
+            cv2.imshow("depth", depth_map_img)
+            stereoscopy.draw_point_cloud(points_3d, depth_map, img_l)
+
     cap.release()
     cv2.destroyAllWindows()
 

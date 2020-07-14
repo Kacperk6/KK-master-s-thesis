@@ -59,7 +59,7 @@ class YolactFacade:
         else:
             mask = self.select_mask_location(masks_cat, boxes_cat)
         logging.info("mask found")
-        return mask
+        return mask.astype('bool')
 
     def predict(self, img):
         """
