@@ -2,7 +2,7 @@ import cv2
 import logging
 
 from yolact1.yolact_facade import YolactFacade
-from localization.stereoscopy import Stereoscopy
+from localization.stereo_vision import StereoVision
 from utils import camera
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(message)s')
@@ -12,7 +12,7 @@ def run():
     logging.info("program started")
 
     yolact = YolactFacade()
-    stereoscopy = Stereoscopy()
+    stereoscopy = StereoVision(calibrate_stereo_matching=True)
 
     cap = camera.get_video_live()
     while True:
@@ -21,6 +21,7 @@ def run():
         cv2.imshow("img_l", img_l)
 
         mask = yolact.run(img_l, 'person')
+        mask = None
         if mask is None:
             logging.info("mask not found")
         else:

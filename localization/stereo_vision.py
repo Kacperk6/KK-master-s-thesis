@@ -17,7 +17,7 @@ def nothing(x):
     pass
 
 
-class Stereoscopy:
+class StereoVision:
     def __init__(self, calibrate_camera=False, calibrate_stereo_matching=False):
         self.calibrate_stereo_matching = calibrate_stereo_matching
         if calibrate_camera:
