@@ -15,14 +15,12 @@ def run():
     stereoscopy = Stereoscopy()
 
     cap = camera.get_video_live()
-    #cap = camera.get_video_from_file('poczestuj_sie.avi')
     while True:
         _, img_double = cap.read()
-        #img_l_dist, img_r_dist = stereoscopy.split_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
         img_l, img_r = stereoscopy.preprocess_stereo_image(img_double, img_double.shape[0], img_double.shape[1])
         cv2.imshow("img_l", img_l)
 
-        mask = yolact.run(img_l, 'cup')
+        mask = yolact.run(img_l, 'person')
         if mask is None:
             logging.info("mask not found")
         else:

@@ -183,15 +183,13 @@ class Stereoscopy:
 
     def preprocess_stereo_image(self, stereo_image, height, width):
         """
-        splits stereo image, converts to greyscale and undistorts it
+        splits stereo image and undistorts it
         :param stereo_image: image to split
         :param height: input image height
         :param width: input image width
         :return: frame_left, frame_right: preprocessed input image
         """
         frame_left, frame_right = self.split_stereo_image(stereo_image, height, width)
-        #frame_left = cv2.cvtColor(frame_left, cv2.COLOR_BGR2GRAY)
-        #frame_right = cv2.cvtColor(frame_right, cv2.COLOR_BGR2GRAY)
         frame_left, frame_right = self.undistort(frame_left, frame_right)
         return frame_left, frame_right
 
@@ -322,40 +320,32 @@ class Stereoscopy:
 
         logging.info("saving calibration data")
         path = 'config/camera_calibration/'
-        # np.save(path + 'objpoints', objpoints)
         np.savez_compressed(path + 'stereo', image_size=(int(WIDTH / 2), HEIGHT), map_l_x=leftMapX, map_l_y=leftMapY,
                             map_r_x=rightMapX, map_r_y=rightMapY, Q=dispartityToDepthMap)
-        '''
-        path_l = path + 'left/'
-        np.save(path_l + 'mtx', mtx_l)
-        np.save(path_l + 'dist', dist_l)
-        np.save(path_l + 'rvecs', rvecs_l)
-        np.save(path_l + 'tvecs', tvecs_l)
-        np.save(path_l + 'newcameramtx', newcameramtx_l)
-        np.save(path_l + 'imgpoints', imgpoints_l)
-
-        path_r = path + 'right/'
-        np.save(path_r + 'mtx', mtx_r)
-        np.save(path_r + 'dist', dist_r)
-        np.save(path_r + 'rvecs', rvecs_r)
-        np.save(path_r + 'tvecs', tvecs_r)
-        np.save(path_r + 'newcameramtx', newcameramtx_r)
-        np.save(path_r + 'imgpoints', imgpoints_r)
-        '''
         logging.info("camera calibration finished")
         return True
 
     def draw_point_cloud(self, points_3d, disparity_map, img):
-        #DISTANCE_LIMIT = 2000
-
+        """
+        visualizes given points with Open3d
+        :param points_3d: 3d points matrix related to image
+        :param disparity_map: disparity map corresponding given points
+        :param img: image to color visualized points with (normally should be left image from stereo camera)
+        """
         #logging.info("saving points_3d")
         #np.savez_compressed('point_cloud', points_3d=points_3d, disparity_map=disparity_map, img=img)
+
+        # convert colors from OpenCV format to the one used in Open3d (RGB 0:1 float)
         colors = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype('float')/255
+
+        # create a mask to use only valid (detected) points
         mask_map = disparity_map > disparity_map.min()
+
+        # mask points_3d and colors; loses image relation data
         output_points = points_3d[mask_map]
-        #output_points[np.isinf(output_points)] = np.nan
-        #output_points[output_points[:, 2] > DISTANCE_LIMIT] = np.nan
         output_colors = colors[mask_map]
+
+        # create Open3D point cloud, assign given points and visualize
         logging.info("creating point cloud file")
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(output_points)
@@ -363,8 +353,15 @@ class Stereoscopy:
         o3d.visualization.draw_geometries([pcd])
 
     def mask_3d(self, mask, points_3d, disparity_map, img):
+        """
+        masks points_3d, disparity_map and img with given 2d mask
+        """
+        # extend mask from 2d to 3d
         mask_3d = mask[:, :, np.newaxis]
+
+        # invalidate masked points
         points_3d = np.where(mask_3d, points_3d, np.nan)
         disparity_map = np.where(mask, disparity_map, disparity_map.min())
         img = np.where(mask_3d, img, 0)
+
         return points_3d, disparity_map, img
