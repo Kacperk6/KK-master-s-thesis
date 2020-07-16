@@ -71,6 +71,7 @@ class UI:
                 img_detected = self.detect_objects(img_interface)
                 cv2.imshow("interface_2", img_detected)
                 self.update = False
+                self.get_3d_scene(img_l, img_r)
 
         logging.info("shutting down")
         cap.release()
@@ -98,6 +99,9 @@ class UI:
         img_detected = self.yolact.evaluate_frame(img)
         return img_detected
 
+    def get_3d_scene(self, img_l, img_r):
+        disparity_map, points_3d = self.stereo_vision.run(img_l, img_r)
+        self.stereo_vision.draw_point_cloud(points_3d, disparity_map, img_l)
 
 ui = UI()
 ui.run()
