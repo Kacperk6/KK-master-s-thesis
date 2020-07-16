@@ -78,7 +78,7 @@ class YolactFacade:
             preds = self.net(batch)
 
             # You can modify the score threshold to your liking
-            cats, scores, boxes, masks = postprocess(preds, w, h, score_threshold=0.5)
+            cats, scores, boxes, masks = postprocess(preds, w, h, score_threshold=0.7)
             if len(cats.size()) == 0:
                 return False
             # changed predicted data to cpu numpy array type to further process
@@ -164,7 +164,12 @@ class YolactFacade:
         frame_mask = frame.copy()
         frame_mask[mask] = color
         frame = cv2.addWeighted(frame_mask, alpha, frame, 1-alpha, 0, frame)
-        return frame
+
+    @staticmethod
+    def sign_object(frame, cat, bbox, color):
+        point = (bbox[0], bbox[1])
+        text = COCO_CLASSES[cat]
+        cv2.putText(frame, text, point, cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
     def evaluate_frame(self, frame):
         """
@@ -174,10 +179,10 @@ class YolactFacade:
         """
         cats, scores, boxes, masks = self.predict(frame)
         frame = frame.copy()
-        color = (0, 255, 0)
         colors = self.make_random_colors(len(cats))
         for i in range(len(masks)):
             self.color_object(frame, masks[i], colors[i])
+            self.sign_object(frame, cats[i], boxes[i], colors[i])
         return frame
 
     @staticmethod
