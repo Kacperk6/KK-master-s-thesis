@@ -2,6 +2,7 @@ import torch
 import cv2
 import numpy as np
 import logging
+import random
 
 from .yolact import Yolact
 from .data import set_cfg
@@ -37,29 +38,29 @@ class YolactFacade:
         :return: np.array; maska wykrytego obiektu;
                  False; w przypadku braku wykrycia obiektu lub błędu
         """
-        cat_index = get_cat_index(cat_name)
-        if cat_index is None:
-            logging.info("Aborting")
-            return None
+        #cat_index = get_cat_index(cat_name)
+        #if cat_index is None:
+        #    logging.info("Aborting")
+        #    return None
 
         cats, scores, boxes, masks = self.predict(frame)
         self.log_classes(cats)
         if cats is False:
             logging.info("No object found. Aborting")
             return None
-        masks_cat_index = np.where(cats == cat_index)
-        if len(masks_cat_index[0]) == 0:
-            logging.info("Given category instance not found. Aborting")
-            return None
-        masks_cat = masks[masks_cat_index]
-        boxes_cat = boxes[masks_cat_index]
-        if self.is_first_detection:
-            mask = self.select_mask_score(masks_cat, boxes_cat)
-            self.is_first_detection = False
-        else:
-            mask = self.select_mask_location(masks_cat, boxes_cat)
+        #masks_cat_index = np.where(cats == cat_index)
+        #if len(masks_cat_index[0]) == 0:
+        #    logging.info("Given category instance not found. Aborting")
+        #    return None
+        #masks_cat = masks[masks_cat_index]
+        #boxes_cat = boxes[masks_cat_index]
+        #if self.is_first_detection:
+        #    mask = self.select_mask_score(masks_cat, boxes_cat)
+        #    self.is_first_detection = False
+        #else:
+        #    mask = self.select_mask_location(masks_cat, boxes_cat)
         logging.info("mask found")
-        return mask.astype('bool')
+        return cats, scores, boxes, masks.astype('bool')
 
     def predict(self, img):
         """
@@ -139,7 +140,6 @@ class YolactFacade:
         predicted_classes_str = ''
         for cat in cats:
             predicted_classes_str += COCO_CLASSES[cat] + ', '
-        predicted_classes_str
         logging.debug("predicted classes:\n{}".format(predicted_classes_str))
 
     @staticmethod
@@ -149,6 +149,69 @@ class YolactFacade:
         frame_mask[:, :, 1] += frame[:, :, 1] * mask
         frame_mask[:, :, 2] += frame[:, :, 2] * mask
         cv2.imshow("chosen object", frame_mask)
+
+    @staticmethod
+    def color_object(frame, mask, color):
+        """
+        colors object based on given mask
+        :param frame: image to edit
+        :param mask: boolean mask of an object
+        :param color: BGR color scalar
+        :return: colored image
+        """
+        alpha = 0.5
+        mask = mask.astype('bool')
+        frame_mask = frame.copy()
+        frame_mask[mask] = color
+        frame = cv2.addWeighted(frame_mask, alpha, frame, 1-alpha, 0, frame)
+        return frame
+
+    def evaluate_frame(self, frame):
+        """
+        detects objects on frame and marks them
+        :param frame: image to detect objects on
+        :return: image with marked detected objects
+        """
+        cats, scores, boxes, masks = self.predict(frame)
+        frame = frame.copy()
+        color = (0, 255, 0)
+        colors = self.make_random_colors(len(cats))
+        for i in range(len(masks)):
+            self.color_object(frame, masks[i], colors[i])
+        return frame
+
+    @staticmethod
+    def make_random_colors(number_of_colors):
+        def make_random_color():
+            B = random.randint(0, 255)
+            G = random.randint(0, 255 - B)
+            R = random.randint(0, 255 - B - G)
+            color = (B, G, R)
+            return color
+
+        def compare_colors(color_1, color_2):
+            """
+            if any color channel difference is greater or equal min_difference, return True, otherwise return False
+            """
+            min_difference = 50
+            # could make it some better-looking, really
+            difference = (abs(color_1[0] - color_2[0]), abs(color_1[1] - color_2[1]), abs(color_1[2] - color_2[2]))
+            for channel in difference:
+                if channel >= min_difference:
+                    return True
+            return False
+
+        colors = []
+        while len(colors) < number_of_colors:
+            color_candidate = make_random_color()
+            is_color_valid = True
+            for color in colors:
+                if not compare_colors(color_candidate, color):
+                    is_color_valid = False
+                    break
+            if is_color_valid:
+                colors.append(color_candidate)
+        return colors
 
 
 def get_cat_index(cat_name):

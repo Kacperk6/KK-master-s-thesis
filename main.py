@@ -40,21 +40,24 @@ class UI:
                 img_l, img_r = self.stereo_vision.preprocess_stereo_image(img_double, img_double.shape[0],
                                                                           img_double.shape[1])
                 img_interface = self.cut_image(img_l)
-                cv2.imshow("img_l", img_l)
                 cv2.imshow("interface", img_interface)
 
+                img_detected = self.detect_objects(img_interface)
+                cv2.imshow("interface_2", img_detected)
+                '''
                 mask = self.yolact.run(img_l, 'person')
                 if mask is None:
                     logging.info("mask not found")
                 else:
                     self.yolact.draw_object(img_l, mask)
-
-                key = cv2.waitKey(1)
+                '''
+                key = cv2.waitKey(0)
                 if key == ord('q'):
                     break
                 elif key == ord(' '):
                     cv2.imwrite('img_l.png', img_l)
                     cv2.imwrite("img_r.png", img_r)
+                '''
                 elif key == ord('d'):
                     depth_map, points_3d = self.stereo_vision.run(img_l, img_r)
                     if mask is not None:
@@ -62,7 +65,7 @@ class UI:
                     depth_map_img = depth_map / 128
                     cv2.imshow("depth", depth_map_img)
                     self.stereo_vision.draw_point_cloud(points_3d, depth_map, img_l)
-
+                '''
         cap.release()
         cv2.destroyAllWindows()
 
@@ -82,7 +85,8 @@ class UI:
             self.mouse_x, self.mouse_y = x + self.img_cut_size, y
 
     def detect_objects(self, img):
-        pass
+        img_detected = self.yolact.evaluate_frame(img)
+        return img_detected
 
 
 ui = UI()
