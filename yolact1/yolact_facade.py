@@ -182,7 +182,16 @@ class YolactFacade:
 
     @staticmethod
     def make_random_colors(number_of_colors):
+        """
+        returns a list of colors with granted color diversity
+        """
+        # minial difference between compared values of color channel, depends on number of colors
+        min_difference = int(255/number_of_colors)
+
         def make_random_color():
+            """
+            returns a random BGR color tuple
+            """
             B = random.randint(0, 255)
             G = random.randint(0, 255 - B)
             R = random.randint(0, 255 - B - G)
@@ -193,7 +202,6 @@ class YolactFacade:
             """
             if any color channel difference is greater or equal min_difference, return True, otherwise return False
             """
-            min_difference = 50
             # could make it some better-looking, really
             difference = (abs(color_1[0] - color_2[0]), abs(color_1[1] - color_2[1]), abs(color_1[2] - color_2[2]))
             for channel in difference:
@@ -203,14 +211,15 @@ class YolactFacade:
 
         colors = []
         while len(colors) < number_of_colors:
-            color_candidate = make_random_color()
+            color_new = make_random_color()
             is_color_valid = True
+            # compare new color with all existing ones
             for color in colors:
-                if not compare_colors(color_candidate, color):
+                if not compare_colors(color_new, color):
                     is_color_valid = False
                     break
             if is_color_valid:
-                colors.append(color_candidate)
+                colors.append(color_new)
         return colors
 
 
