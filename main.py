@@ -1,3 +1,4 @@
+import numpy as np
 import cv2
 import logging
 
@@ -26,6 +27,9 @@ class UI:
         cv2.namedWindow("interface")
         cv2.setMouseCallback("interface", self.get_mouse_position)
 
+        # whether to show Open3D scene visualization
+        self.show_3d_model = True
+
         # action to perform
         # 0 - just image transmission
         # 1 - detect objects
@@ -49,9 +53,9 @@ class UI:
                 if not ret:
                     logging.error("image read failed. aborting")
                     break
-                self.img_l, self.img_r = self.stereo_vision.preprocess_stereo_image(img_double, img_double.shape[0],
+                img_l, img_r = self.stereo_vision.preprocess_stereo_image(img_double, img_double.shape[0],
                                                                                     img_double.shape[1])
-                img_interface = self.cut_image(self.img_l)
+                img_interface = self.cut_image(img_l)
                 cv2.imshow("interface", img_interface)
 
             key = cv2.waitKey(1)
@@ -61,8 +65,8 @@ class UI:
             elif key == ord('q'):
                 break
             elif key == ord(' '):
-                cv2.imwrite('img_l.png', self.img_l)
-                cv2.imwrite("img_r.png", self.img_r)
+                cv2.imwrite('img_l.png', img_l)
+                cv2.imwrite("img_r.png", img_r)
             # elif key == ord('d'):
             #     depth_map, points_3d = self.stereo_vision.run(img_l, img_r)
             #     if mask is not None:
@@ -74,7 +78,8 @@ class UI:
             # 1 - detect objects
             if self.mode == 1:
                 if self.update:
-                    img_detected, cats, bboxes, masks = self.detect_objects(img_interface)
+                    logging.info("detecting objects")
+                    img_detected, cats, _, bboxes, masks = self.yolact.evaluate_frame(img_interface)
                     cv2.imshow("interface", img_detected)
                     self.update = False
                 if self.is_mouse_called:
@@ -82,6 +87,12 @@ class UI:
                     object_idx = self.choose_object_at_point(self.mouse_x, self.mouse_y, cats, bboxes, masks)
                     if object_idx is not None:
                         logging.info("chosen object: {}".format(COCO_CLASSES[cats[object_idx]]))
+                        scene_3d, disparity_map = self.stereo_vision.get_3d_scene(img_l, img_r, self.show_3d_model)
+                        mask = self.resize_mask(masks[object_idx], (img_l.shape[0], img_l.shape[1]))
+                        object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
+                                                               self.show_3d_model)
+                    else:
+                        logging.info("no detected object at given point")
 
         logging.info("shutting down")
         cap.release()
@@ -97,14 +108,6 @@ class UI:
         if event == cv2.EVENT_LBUTTONDBLCLK:
             self.is_mouse_called = True
             self.mouse_x, self.mouse_y = x, y
-
-    def detect_objects(self, img):
-        img_detected, cats, _, bboxes, masks = self.yolact.evaluate_frame(img)
-        return img_detected, cats, bboxes, masks
-
-    def get_3d_scene(self, img_l, img_r):
-        disparity_map, points_3d = self.stereo_vision.run(img_l, img_r)
-        self.stereo_vision.draw_point_cloud(points_3d, disparity_map, img_l)
 
     def choose_object_at_point(self, x, y, cats, bboxes, masks):
         """
@@ -137,6 +140,11 @@ class UI:
                 if object_size < smallest_object_size:
                     object_at_point_idx = i
         return object_at_point_idx
+
+    def resize_mask(self, mask, size):
+        mask_resized = np.zeros(size, np.bool)
+        mask_resized[0:size[0], self.img_cut_size:size[1]] = mask
+        return mask_resized
 
 
 ui = UI()

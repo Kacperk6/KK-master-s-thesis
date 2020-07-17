@@ -55,13 +55,15 @@ class StereoVision:
 
             self.calibrate_stereo_matcher()
 
-    def run(self, img_l, img_r):
-        img_l = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
-        img_r = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
-        disparity = self.stereo.compute(img_l, img_r)
-        disparity = disparity.astype('float32')/16
-        points_3d = cv2.reprojectImageTo3D(disparity, self.Q)
-        return disparity, points_3d
+    def get_3d_scene(self, img_l, img_r, show_3d_model=False):
+        img_l_gray = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
+        img_r_gray = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
+        disparity_map = self.stereo.compute(img_l_gray, img_r_gray)
+        disparity_map = disparity_map.astype('float32')/16
+        points_3d = cv2.reprojectImageTo3D(disparity_map, self.Q)
+        if show_3d_model:
+            self.draw_point_cloud(points_3d, disparity_map, img_l)
+        return points_3d, disparity_map
 
     def calibrate_stereo_matcher(self):
         img_l_color = cv2.imread('img_l.png')
@@ -352,7 +354,7 @@ class StereoVision:
         pcd.colors = o3d.Vector3dVector(output_colors)
         o3d.visualization.draw_geometries([pcd])
 
-    def mask_3d(self, mask, points_3d, disparity_map, img):
+    def mask_3d(self, mask, points_3d, disparity_map, img, show_3d_model=False):
         """
         masks points_3d, disparity_map and img with given 2d mask
         """
@@ -364,4 +366,6 @@ class StereoVision:
         disparity_map = np.where(mask, disparity_map, disparity_map.min())
         img = np.where(mask_3d, img, 0)
 
+        if show_3d_model:
+            self.draw_point_cloud(points_3d, disparity_map, img)
         return points_3d, disparity_map, img

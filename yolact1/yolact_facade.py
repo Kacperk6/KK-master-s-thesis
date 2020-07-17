@@ -60,7 +60,7 @@ class YolactFacade:
         #else:
         #    mask = self.select_mask_location(masks_cat, boxes_cat)
         logging.info("mask found")
-        return cats, scores, boxes, masks.astype('bool')
+        return cats, scores, boxes, masks
 
     def predict(self, img):
         """
@@ -85,7 +85,7 @@ class YolactFacade:
             cats = cats.cpu().numpy().astype('int64')
             scores = scores.cpu().numpy().astype('float32')
             boxes = boxes.cpu().numpy().astype('int64')
-            masks = masks.cpu().numpy().astype('uint8')
+            masks = masks.cpu().numpy().astype('bool')
             return cats, scores, boxes, masks
 
     def select_mask_score(self, masks, boxes):
@@ -160,7 +160,6 @@ class YolactFacade:
         :return: colored image
         """
         alpha = 0.5
-        mask = mask.astype('bool')
         frame_mask = frame.copy()
         frame_mask[mask] = color
         frame = cv2.addWeighted(frame_mask, alpha, frame, 1-alpha, 0, frame)
