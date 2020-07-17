@@ -25,7 +25,6 @@ class UI:
 
         cv2.namedWindow("interface")
         cv2.setMouseCallback("interface", self.get_mouse_position)
-        self.mouse_x, self.mouse_y = 0, 0
 
         # action to perform
         # 0 - just image transmission
@@ -36,13 +35,9 @@ class UI:
         # whether update interface image
         self.update = True
 
-        # holders for detected objects data
-        self.cats = None
-        self.bboxes = None
-        self.masks = None
-
-        # holder for user-picked object
-        self.chosen_object_idx = None
+        # mouse callback parameters holders
+        self.is_mouse_called = False
+        self.mouse_x, self.mouse_y = 0, 0
 
     def run(self):
         cap = camera.get_video_live()
@@ -54,9 +49,9 @@ class UI:
                 if not ret:
                     logging.error("image read failed. aborting")
                     break
-                img_l, img_r = self.stereo_vision.preprocess_stereo_image(img_double, img_double.shape[0],
-                                                                          img_double.shape[1])
-                img_interface = self.cut_image(img_l)
+                self.img_l, self.img_r = self.stereo_vision.preprocess_stereo_image(img_double, img_double.shape[0],
+                                                                                    img_double.shape[1])
+                img_interface = self.cut_image(self.img_l)
                 cv2.imshow("interface", img_interface)
 
             key = cv2.waitKey(1)
@@ -66,8 +61,8 @@ class UI:
             elif key == ord('q'):
                 break
             elif key == ord(' '):
-                cv2.imwrite('img_l.png', img_l)
-                cv2.imwrite("img_r.png", img_r)
+                cv2.imwrite('img_l.png', self.img_l)
+                cv2.imwrite("img_r.png", self.img_r)
             # elif key == ord('d'):
             #     depth_map, points_3d = self.stereo_vision.run(img_l, img_r)
             #     if mask is not None:
@@ -76,11 +71,17 @@ class UI:
             #     cv2.imshow("depth", depth_map_img)
             #     self.stereo_vision.draw_point_cloud(points_3d, depth_map, img_l)
 
-            if self.mode == 1 and self.update:
-                img_detected = self.detect_objects(img_interface)
-                cv2.imshow("interface", img_detected)
-                self.update = False
-                self.get_3d_scene(img_l, img_r)
+            # 1 - detect objects
+            if self.mode == 1:
+                if self.update:
+                    img_detected, cats, bboxes, masks = self.detect_objects(img_interface)
+                    cv2.imshow("interface", img_detected)
+                    self.update = False
+                if self.is_mouse_called:
+                    self.is_mouse_called = False
+                    object_idx = self.choose_object_at_point(self.mouse_x, self.mouse_y, cats, bboxes, masks)
+                    if object_idx is not None:
+                        logging.info("chosen object: {}".format(COCO_CLASSES[cats[object_idx]]))
 
         logging.info("shutting down")
         cap.release()
@@ -94,50 +95,44 @@ class UI:
     # mouse callback function
     def get_mouse_position(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDBLCLK:
-
-            if self.mode == 0:
-                pass
-            elif self.mode == 1:
-                object_idx = self.choose_object_at_point(x, y)
-                if object_idx is not None:
-                    self.chosen_object_idx = object_idx
-            elif self.mode == 2:
-                # compensate cut image
-                x += self.img_cut_size
-                pass
+            self.is_mouse_called = True
+            self.mouse_x, self.mouse_y = x, y
 
     def detect_objects(self, img):
-        img_detected, self.cats, _, self.bboxes, self.masks = self.yolact.evaluate_frame(img)
-        return img_detected
+        img_detected, cats, _, bboxes, masks = self.yolact.evaluate_frame(img)
+        return img_detected, cats, bboxes, masks
 
     def get_3d_scene(self, img_l, img_r):
         disparity_map, points_3d = self.stereo_vision.run(img_l, img_r)
         self.stereo_vision.draw_point_cloud(points_3d, disparity_map, img_l)
 
-    def choose_object_at_point(self, x, y):
+    def choose_object_at_point(self, x, y, cats, bboxes, masks):
         """
         returns index of detected object at given image point, smallest one in case of multiple objects at point
         :param x: x (horizontal) point value
         :param y: y (vertical) point value
+        :param cats: np.array of detected objects categories
+        :param bboxes: np.array of detected objects bounding boxes
+        :param masks: np.array of detected objects masks
         :return: index of smallest object at point from array of detected objects (e.g. self.mask),
                  None if no objects at point
         """
         all_objects_at_point_idx = []
-        for i in range(len(self.cats)):
-            if self.masks[i][y][x]:
+        for i in range(len(cats)):
+            if masks[i][y][x]:
                 all_objects_at_point_idx.append(i)
         if len(all_objects_at_point_idx) == 0:
             return None
         elif len(all_objects_at_point_idx) == 1:
             object_at_point_idx = all_objects_at_point_idx[0]
         else:
-            w = self.bboxes[all_objects_at_point_idx[0]][2] - self.bboxes[all_objects_at_point_idx[0]][0]
-            h = self.bboxes[all_objects_at_point_idx[0]][3] - self.bboxes[all_objects_at_point_idx[0]][1]
+            w = bboxes[all_objects_at_point_idx[0]][2] - bboxes[all_objects_at_point_idx[0]][0]
+            h = bboxes[all_objects_at_point_idx[0]][3] - bboxes[all_objects_at_point_idx[0]][1]
             smallest_object_size = w * h
             object_at_point_idx = all_objects_at_point_idx[0]
             for i in range(1, len(all_objects_at_point_idx)):
-                w = self.bboxes[all_objects_at_point_idx[i]][2] - self.bboxes[all_objects_at_point_idx[i]][0]
-                h = self.bboxes[all_objects_at_point_idx[i]][3] - self.bboxes[all_objects_at_point_idx[i]][1]
+                w = bboxes[all_objects_at_point_idx[i]][2] - bboxes[all_objects_at_point_idx[i]][0]
+                h = bboxes[all_objects_at_point_idx[i]][3] - bboxes[all_objects_at_point_idx[i]][1]
                 object_size = w * h
                 if object_size < smallest_object_size:
                     object_at_point_idx = i
