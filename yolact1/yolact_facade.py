@@ -176,6 +176,7 @@ class YolactFacade:
         detects objects on frame and marks them
         :param frame: image to detect objects on
         :return: image with marked detected objects
+                 categories, scores, bounding boxes and masks of detected objects
         """
         cats, scores, boxes, masks = self.predict(frame)
         frame = frame.copy()
@@ -183,7 +184,7 @@ class YolactFacade:
         for i in range(len(masks)):
             self.color_object(frame, masks[i], colors[i])
             self.sign_object(frame, cats[i], boxes[i], colors[i])
-        return frame
+        return frame, cats, scores, boxes, masks
 
     @staticmethod
     def make_random_colors(number_of_colors):
