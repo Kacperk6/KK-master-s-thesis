@@ -45,9 +45,9 @@ class YolactFacade:
 
         cats, scores, boxes, masks = self.predict(frame)
         self.log_classes(cats)
-        if cats is False:
+        if cats is None:
             logging.info("No object found. Aborting")
-            return None
+            return None, None, None, None
         #masks_cat_index = np.where(cats == cat_index)
         #if len(masks_cat_index[0]) == 0:
         #    logging.info("Given category instance not found. Aborting")
@@ -66,7 +66,7 @@ class YolactFacade:
         """
         analizuje jeden obraz
         :param img: np.array; analizowany obraz
-        :return: cats: np.array([], int64)
+        :return: cats: np.array([], int64), False if no detection
                  scores: np.array([], float32)
                  boxes: np.array([[x1, y1, x2, y2]], int64)
                  masks: np.array([[[]]], uint8)
@@ -79,8 +79,8 @@ class YolactFacade:
 
             # You can modify the score threshold to your liking
             cats, scores, boxes, masks = postprocess(preds, w, h, score_threshold=0.7)
-            if len(cats.size()) == 0:
-                return False
+            if len(cats) == 0:
+                return None, None, None, None
             # changed predicted data to cpu numpy array type to further process
             cats = cats.cpu().numpy().astype('int64')
             scores = scores.cpu().numpy().astype('float32')
@@ -178,6 +178,8 @@ class YolactFacade:
                  categories, scores, bounding boxes and masks of detected objects
         """
         cats, scores, boxes, masks = self.predict(frame)
+        if cats is None:
+            return None, None, None, None, None
         frame = frame.copy()
         colors = self.make_random_colors(len(cats))
         for i in range(len(masks)):

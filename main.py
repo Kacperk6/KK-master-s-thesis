@@ -47,7 +47,8 @@ class UI:
         cap = camera.get_video_live()
         self.update = True
         while cap.isOpened():
-            if self.update:
+            if self.mode == 0:
+                self.update = True
                 ret, img_double = cap.read()
                 # handle image read error
                 if not ret:
@@ -80,9 +81,12 @@ class UI:
                 if self.update:
                     logging.info("detecting objects")
                     img_detected, cats, _, bboxes, masks = self.yolact.evaluate_frame(img_interface)
-                    cv2.imshow("interface", img_detected)
+                    if img_detected is None:
+                        logging.info("no objects detected")
+                    else:
+                        cv2.imshow("interface", img_detected)
                     self.update = False
-                if self.is_mouse_called:
+                if self.is_mouse_called and not self.update:
                     self.is_mouse_called = False
                     object_idx = self.choose_object_at_point(self.mouse_x, self.mouse_y, cats, bboxes, masks)
                     if object_idx is not None:
