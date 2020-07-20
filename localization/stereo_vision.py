@@ -394,10 +394,38 @@ class StereoVision:
         return points_3d
 
     @staticmethod
-    def is_point_floor(point):
-        floor_height = 15
-        floor_height_threshold = 5
-        if abs(point[1] - floor_height) < floor_height_threshold:
+    def is_point_reachable(scene, point):
+        """
+        checks if robot can reach given point
+        """
+        def is_point_floor(point):
+            """
+            checks if point height is within range of expected floor
+            """
+            floor_height = 15
+            floor_height_threshold = 5
+            if abs(point[1] - floor_height) < floor_height_threshold:
+                return True
+            else:
+                return False
+
+        def is_area_clear(scene, point):
+            """
+            checks if there are no points detected within specified area over given point
+            """
+            horizontal_radius_restricted = 300
+            height_restricted_min = 50
+            height_restricted_max = 500
+
+            for row in scene:
+                for scene_point in row:
+                    distance_horizontal = ((scene_point[0] - point[0])**2 + (scene_point[1] - point[1])**2)**0.5
+                    if abs(distance_horizontal) < horizontal_radius_restricted:
+                        distance_vertical = scene_point[2] - point[2]
+                        if height_restricted_min < distance_vertical < height_restricted_max:
+                            return False
             return True
-        else:
-            return False
+        if is_point_floor(point):
+            if is_area_clear(scene, point):
+                return True
+        return False

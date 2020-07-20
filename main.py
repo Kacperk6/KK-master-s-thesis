@@ -109,7 +109,7 @@ class UI:
                     self.is_mouse_called = False
                     #np.savez_compressed("points_3d_ground", scene_3d=scene_3d, disparity_map=disparity_map, img=img_l)
                     point = scene_3d[self.mouse_y][self.mouse_x]
-                    self.stereo_vision.is_point_floor(point)
+                    print(self.stereo_vision.is_point_reachable(scene_3d, point))
 
 
         logging.info("shutting down")
