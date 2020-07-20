@@ -56,10 +56,11 @@ class StereoVision:
             self.calibrate_stereo_matcher()
 
     def get_3d_scene(self, img_l, img_r, show_3d_model=False):
+        MIN_DISPARITY = 20
         img_l_gray = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
         img_r_gray = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity_map = self.stereo.compute(img_l_gray, img_r_gray)
-        disparity_map = disparity_map.astype('float32')/16
+        disparity_map[disparity_map < MIN_DISPARITY] = disparity_map.min()
         points_3d = cv2.reprojectImageTo3D(disparity_map, self.Q)
         if show_3d_model:
             self.draw_point_cloud(points_3d, disparity_map, img_l)
@@ -358,6 +359,25 @@ class StereoVision:
         """
         masks points_3d, disparity_map and img with given 2d mask
         """
+        def remove_outliers(disparity_map):
+            """
+            sets single object disparity map outliers invalid using z-score threshold
+            """
+            # the higher value the less restrictive threshold is; 3 means that in normal distribution 99,7% points would remain
+            z_threshold = 3
+            disparity_invalid = disparity_map.min()
+            # analyze only valid disparities
+            disparity_map_valid = disparity_map[disparity_map > disparity_invalid]
+            mean = np.mean(disparity_map_valid)
+            std = np.std(disparity_map_valid)
+            for i in range(disparity_map.shape[0]):
+                for j in range(disparity_map.shape[1]):
+                    if disparity_map[i][j] > disparity_invalid:
+                        z = (disparity_map[i][j] - mean) / std
+                        if abs(z) > z_threshold:
+                            disparity_map[i][j] = disparity_invalid
+            return disparity_map
+
         # extend mask from 2d to 3d
         mask_3d = mask[:, :, np.newaxis]
 
@@ -365,7 +385,9 @@ class StereoVision:
         points_3d = np.where(mask_3d, points_3d, np.nan)
         disparity_map = np.where(mask, disparity_map, disparity_map.min())
         img = np.where(mask_3d, img, 0)
-
+        #np.savez_compressed('points_3d_masked', points_3d=points_3d, disparity_map=disparity_map, img=img)
         if show_3d_model:
+            self.draw_point_cloud(points_3d, disparity_map, img)
+            disparity_map = remove_outliers(disparity_map)
             self.draw_point_cloud(points_3d, disparity_map, img)
         return points_3d, disparity_map, img

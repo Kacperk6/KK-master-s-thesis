@@ -92,6 +92,9 @@ class UI:
                     if object_idx is not None:
                         logging.info("chosen object: {}".format(COCO_CLASSES[cats[object_idx]]))
                         scene_3d, disparity_map = self.stereo_vision.get_3d_scene(img_l, img_r, self.show_3d_model)
+                        disparity_map_img = disparity_map / 2048
+                        cv2.imshow("disparity", disparity_map_img)
+                        cv2.imshow("image", img_l)
                         mask = self.resize_mask(masks[object_idx], (img_l.shape[0], img_l.shape[1]))
                         object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
                                                                self.show_3d_model)
