@@ -92,14 +92,25 @@ class UI:
                     if object_idx is not None:
                         logging.info("chosen object: {}".format(COCO_CLASSES[cats[object_idx]]))
                         scene_3d, disparity_map = self.stereo_vision.get_3d_scene(img_l, img_r, self.show_3d_model)
-                        disparity_map_img = disparity_map / 2048
-                        cv2.imshow("disparity", disparity_map_img)
-                        cv2.imshow("image", img_l)
+                        # disparity_map_img = disparity_map / 2048
+                        # cv2.imshow("disparity", disparity_map_img)
+                        # cv2.imshow("image", img_l)
                         mask = self.resize_mask(masks[object_idx], (img_l.shape[0], img_l.shape[1]))
                         object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
                                                                self.show_3d_model)
                     else:
                         logging.info("no detected object at given point")
+            elif self.mode == 2:
+                if self.update:
+                    logging.info("mapping scene")
+                    scene_3d, disparity_map = self.stereo_vision.get_3d_scene(img_l, img_r, self.show_3d_model)
+                    self.update = False
+                if self.is_mouse_called and not self.update:
+                    self.is_mouse_called = False
+                    #np.savez_compressed("points_3d_ground", scene_3d=scene_3d, disparity_map=disparity_map, img=img_l)
+                    point = scene_3d[self.mouse_y][self.mouse_x]
+                    self.stereo_vision.is_point_floor(point)
+
 
         logging.info("shutting down")
         cap.release()

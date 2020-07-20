@@ -392,3 +392,12 @@ class StereoVision:
         if show_3d_model:
             self.draw_point_cloud(points_3d, disparity_map, img)
         return points_3d
+
+    @staticmethod
+    def is_point_floor(point):
+        floor_height = 15
+        floor_height_threshold = 5
+        if abs(point[1] - floor_height) < floor_height_threshold:
+            return True
+        else:
+            return False
