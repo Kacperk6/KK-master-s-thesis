@@ -378,16 +378,17 @@ class StereoVision:
                             disparity_map[i][j] = disparity_invalid
             return disparity_map
 
-        # extend mask from 2d to 3d
-        mask_3d = mask[:, :, np.newaxis]
-
         # invalidate masked points
-        points_3d = np.where(mask_3d, points_3d, np.nan)
         disparity_map = np.where(mask, disparity_map, disparity_map.min())
-        img = np.where(mask_3d, img, 0)
-        #np.savez_compressed('points_3d_masked', points_3d=points_3d, disparity_map=disparity_map, img=img)
+        # remove disparity outliers
+        disparity_map = remove_outliers(disparity_map)
+        # update mask to not contain detected outliers
+        mask_updated = np.where(disparity_map > disparity_map.min(), True, False)
+        # extend mask from 2d to 3d
+        mask_3d = mask_updated[:, :, np.newaxis]
+        # mask 3d points to detected object without outlying points
+        points_3d = np.where(mask_3d, points_3d, np.nan)
+
         if show_3d_model:
             self.draw_point_cloud(points_3d, disparity_map, img)
-            disparity_map = remove_outliers(disparity_map)
-            self.draw_point_cloud(points_3d, disparity_map, img)
-        return points_3d, disparity_map, img
+        return points_3d
