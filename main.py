@@ -6,6 +6,7 @@ from yolact1.yolact_facade import YolactFacade
 from localization.stereo_vision import StereoVision
 from utils import camera
 from yolact1.data.config import COCO_CLASSES
+from shape_analysis.shape_analysis import ShapeAnalyzer
 
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(filename)s:%(funcName)s:%(message)s')
@@ -20,6 +21,9 @@ class UI:
 
         logging.info("initializing stereo vision")
         self.stereo_vision = StereoVision()
+
+        logging.info("initializing shape analyzer")
+        self.shape_analyzer = ShapeAnalyzer()
 
         # how many left pixels to cut from interface image to fit stereo vision output data
         self.img_cut_size = self.stereo_vision.minDisparity + self.stereo_vision.numDisparities
@@ -98,6 +102,9 @@ class UI:
                         mask = self.resize_mask(masks[object_idx], (img_l.shape[0], img_l.shape[1]))
                         object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
                                                                self.show_3d_model)
+                        contour = self.shape_analyzer.make_contour(mask)
+                        img_contour = self.shape_analyzer.draw_contour(contour, (img_l.shape[0], img_l.shape[1]))
+                        cv2.imshow("contour", img_contour)
                     else:
                         logging.info("no detected object at given point")
             elif self.mode == 2:
