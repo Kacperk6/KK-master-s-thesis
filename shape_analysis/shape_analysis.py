@@ -5,6 +5,7 @@ import cv2
 class ShapeAnalyzer:
     def __init__(self):
         self.contour = None
+        self.centroid = None
 
     def make_contour(self, mask):
         """
@@ -28,3 +29,20 @@ class ShapeAnalyzer:
         cv2.drawContours(img, [contour], -1, (0, 255, 0), 3)
         return img
 
+    def get_contour_parameters(self):
+        """
+        gets contour parameters used in shape analysis and saves them in class-level holders
+        """
+        # contour moments
+        M = cv2.moments(self.contour)
+        # contour centroid (c_x, c_y)
+        self.centroid = (int(M['m10']/M['m00']), int(M['m01']/M['m00']))
+
+    def get_centroid_distance(self, points):
+        """
+        returns distance between center of grasp and object centroid
+        :param points: pair of points (x,y) (tuple or list) defining grasp points
+        """
+        grasp_center = ((points[0][0] + points[1][0])/2, (points[0][1] + points[1][1])/2)
+        distance = ((grasp_center[0] - self.centroid[0])**2 + (grasp_center[1] - self.centroid[1])**2)**0.5
+        return distance
