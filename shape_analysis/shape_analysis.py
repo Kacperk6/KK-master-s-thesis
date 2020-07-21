@@ -47,6 +47,21 @@ class ShapeAnalyzer:
         self.centroid = (int(M['m10']/M['m00']), int(M['m01']/M['m00']))
         self.cont_len = len(self.contour)
 
+    def decimate_contour(self):
+        """
+        reduces number of contour points uniformly
+        """
+        sample_rate = 5
+        contour_decimated = []
+        i = 0
+        for point in self.contour:
+            if i == sample_rate:
+                contour_decimated.append(point)
+                i = 0
+            else:
+                i += 1
+        self.contour = contour_decimated
+
     def get_grasp_points(self):
         """
         returns a list of all potential grasp points pairs
@@ -65,4 +80,8 @@ class ShapeAnalyzer:
         """
         grasp_center = ((points[0][0] + points[1][0])/2, (points[0][1] + points[1][1])/2)
         distance = ((grasp_center[0] - self.centroid[0])**2 + (grasp_center[1] - self.centroid[1])**2)**0.5
+        return distance
+
+    def get_grasp_points_distance(self, points):
+        distance = ((points[0][0] - points[1][0])**2 + (points[0][0] - points[1][0])**2)**0.5
         return distance
