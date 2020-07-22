@@ -102,6 +102,7 @@ class UI:
                         mask = self.resize_mask(masks[object_idx], (img_l.shape[0], img_l.shape[1]))
                         object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
                                                                self.show_3d_model)
+                        position = self.stereo_vision.get_object_position(object_3d)
                         contour = self.shape_analyzer.analyze_shape(mask)
                     else:
                         logging.info("no detected object at given point")

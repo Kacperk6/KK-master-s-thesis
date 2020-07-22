@@ -61,6 +61,8 @@ class StereoVision:
         img_r_gray = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity_map = self.stereo.compute(img_l_gray, img_r_gray)
         disparity_map[disparity_map < MIN_DISPARITY] = disparity_map.min()
+        # scale disparity map
+        disparity_map = (disparity_map / 16).astype('float32')
         points_3d = cv2.reprojectImageTo3D(disparity_map, self.Q)
         if show_3d_model:
             self.draw_point_cloud(points_3d, disparity_map, img_l)
@@ -429,3 +431,10 @@ class StereoVision:
             if is_area_clear(scene, point):
                 return True
         return False
+
+    @staticmethod
+    def get_object_position(object_3d):
+        object_3d = object_3d[~np.isnan(object_3d)]
+        object_3d = np.reshape(object_3d, (int(len(object_3d)/3), 3))
+        position = np.mean(object_3d, axis=0)
+        return position
