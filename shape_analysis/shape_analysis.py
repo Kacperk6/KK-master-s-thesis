@@ -15,9 +15,22 @@ class ShapeAnalyzer:
         :param mask: can be boolean
         :return: contour - OpenCV contour; list of contour points locations (x, y)
         """
+        def get_largest_contour(contours):
+            """
+            in case of (rare) multiple contours, return largest one
+            """
+            largest_area = 0
+            largest_contour = None
+            for contour in contours:
+                if cv2.contourArea(contour) > largest_area:
+                    largest_contour = contour
+            return largest_contour
         mask = mask.astype('uint8')
         contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-        contour = contours[0]
+        if contours.shape[0] == 1:
+            contour = contours[0]
+        else:
+            contour = get_largest_contour(contours)
         self.get_contour_parameters(contour)
         return contour
 

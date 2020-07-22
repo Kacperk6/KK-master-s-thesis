@@ -32,7 +32,7 @@ class UI:
         cv2.setMouseCallback("interface", self.get_mouse_position)
 
         # whether to show Open3D scene visualization
-        self.show_3d_model = True
+        self.show_3d_model = False
 
         # action to perform
         # 0 - just image transmission
