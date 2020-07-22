@@ -4,11 +4,16 @@ import math
 
 
 class ShapeAnalyzer:
-    def __init__(self):
+    def __init__(self, cam_mat):
         self.centroid = None
         self.cont_len = None
 
-    def make_contour(self, mask):
+        # focal length of a camera in px, used for pixel-millimeter conversion
+        self.cam_focal_length = self.get_camera_focal_length(cam_mat)
+
+        self.size_factor = None
+
+    def make_contour(self, mask, distance):
         """
         returns countour of a given mask
         mask has to be uniform, without multiple blobs
@@ -27,17 +32,18 @@ class ShapeAnalyzer:
             return largest_contour
         mask = mask.astype('uint8')
         contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-        if contours.shape[0] == 1:
+        if len(contours) == 1:
             contour = contours[0]
         else:
             contour = get_largest_contour(contours)
+        contour = self.decimate_contour(contour)
+        contour = self.scale_contour(contour, distance)
         self.get_contour_parameters(contour)
         return contour
 
-    def analyze_shape(self, mask):
-        contour = self.make_contour(mask)
-        self.draw_contour(contour, (mask.shape[0], mask.shape[1]))
-        contour = self.decimate_contour(contour)
+    def analyze_shape(self, mask, distance):
+        contour = self.make_contour(mask, distance)
+        self.draw_contour(contour, (int(mask.shape[0]*self.size_factor), int(mask.shape[1]*self.size_factor)))
         grasp_points = self.get_grasp_points(contour)
 
     @staticmethod
@@ -113,3 +119,21 @@ class ShapeAnalyzer:
             # no need for atan2
             orientation = math.atan(line[1] / line[0])
         return orientation
+
+    def scale_contour(self, contour, distance):
+        """
+        scales given contour from pixels to millimeters, based on size factor = object distance / camera focal length
+        """
+        size_factor = distance / self.cam_focal_length
+        self.size_factor = size_factor
+        return (contour * size_factor).astype('int')
+
+    def get_camera_focal_length(self, cam_mat):
+        """
+        returns focal length of a camera in px, read from given camera matrix
+        focal length is mean of x and y focal lengths, as they are usually pretty much the same
+        """
+        f_x = cam_mat[0][0]
+        f_y = cam_mat[1][1]
+        f = (f_x + f_y) / 2
+        return f

@@ -23,7 +23,7 @@ class UI:
         self.stereo_vision = StereoVision()
 
         logging.info("initializing shape analyzer")
-        self.shape_analyzer = ShapeAnalyzer()
+        self.shape_analyzer = ShapeAnalyzer(self.stereo_vision.cam_mat_l)
 
         # how many left pixels to cut from interface image to fit stereo vision output data
         self.img_cut_size = self.stereo_vision.minDisparity + self.stereo_vision.numDisparities
@@ -32,7 +32,7 @@ class UI:
         cv2.setMouseCallback("interface", self.get_mouse_position)
 
         # whether to show Open3D scene visualization
-        self.show_3d_model = False
+        self.show_3d_model = True
 
         # action to perform
         # 0 - just image transmission
@@ -59,7 +59,7 @@ class UI:
                     logging.error("image read failed. aborting")
                     break
                 img_l, img_r = self.stereo_vision.preprocess_stereo_image(img_double, img_double.shape[0],
-                                                                                    img_double.shape[1])
+                                                                          img_double.shape[1])
                 img_interface = self.cut_image(img_l)
                 cv2.imshow("interface", img_interface)
 
@@ -103,7 +103,7 @@ class UI:
                         object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
                                                                self.show_3d_model)
                         position = self.stereo_vision.get_object_position(object_3d)
-                        contour = self.shape_analyzer.analyze_shape(mask)
+                        contour = self.shape_analyzer.analyze_shape(mask, position[2])
                     else:
                         logging.info("no detected object at given point")
             elif self.mode == 2:

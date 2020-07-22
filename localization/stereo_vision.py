@@ -22,7 +22,7 @@ class StereoVision:
         self.calibrate_stereo_matching = calibrate_stereo_matching
         if calibrate_camera:
             self.calibrate_camera()
-        self.image_size, self.map_l_x, self.map_l_y, self.map_r_x, self.map_r_y, self.Q = self.load_calibration_data()
+        self.image_size, self.map_l_x, self.map_l_y, self.map_r_x, self.map_r_y, self.Q, self.cam_mat_l, self.cam_mat_r = self.load_calibration_data()
         '''
         self.stereo.setMinDisparity(4)
         self.stereo.setNumDisparities(128)
@@ -212,7 +212,9 @@ class StereoVision:
         map_r_x = calibration["map_r_x"]
         map_r_y = calibration["map_r_y"]
         Q = calibration["Q"]
-        return image_size, map_l_x, map_l_y, map_r_x, map_r_y, Q
+        cam_mat_l = calibration["cam_mat_l"]
+        cam_mat_r = calibration["cam_mat_r"]
+        return image_size, map_l_x, map_l_y, map_r_x, map_r_y, Q, cam_mat_l, cam_mat_r
 
     def calibrate_camera(self):
         """
@@ -326,7 +328,8 @@ class StereoVision:
         logging.info("saving calibration data")
         path = 'config/camera_calibration/'
         np.savez_compressed(path + 'stereo', image_size=(int(WIDTH / 2), HEIGHT), map_l_x=leftMapX, map_l_y=leftMapY,
-                            map_r_x=rightMapX, map_r_y=rightMapY, Q=dispartityToDepthMap)
+                            map_r_x=rightMapX, map_r_y=rightMapY, Q=dispartityToDepthMap, cam_mat_l=mtx_l,
+                            cam_mat_r=mtx_r)
         logging.info("camera calibration finished")
         return True
 
@@ -366,7 +369,7 @@ class StereoVision:
             sets single object disparity map outliers invalid using z-score threshold
             """
             # the higher value the less restrictive threshold is; 3 means that in normal distribution 99,7% points would remain
-            z_threshold = 3
+            z_threshold = 2
             disparity_invalid = disparity_map.min()
             # analyze only valid disparities
             disparity_map_valid = disparity_map[disparity_map > disparity_invalid]
