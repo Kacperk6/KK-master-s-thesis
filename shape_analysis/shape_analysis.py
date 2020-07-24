@@ -52,21 +52,38 @@ class ShapeAnalyzer:
 
     def analyze_shape_test(self):
         contour, grasp_points_idx_all = self.load_data()
-        # contour_x = contour[:, 0, 0]
-        # contour_y = contour[:, 0, 1]
-        # grasp_points_x = grasp_points[:, 0, 0]
-        # grasp_points_y = grasp_points[:, 0, 1]
-        for i in range(len(grasp_points_idx_all)):
-            grasp_points_idx = grasp_points_idx_all[i]
+        centroid = self.centroid
+
+        # list to store grasp point pairs and all their scores of different categories
+        grasp_points_score_all = []
+        # individual list elements as dictionaries
+        for grasp_points_idx in grasp_points_idx_all:
+            grasp_points_score_all.append({'points': (contour[grasp_points_idx[0]][0], contour[grasp_points_idx[1]][0]),
+                                           'idx': grasp_points_idx})
+
+
+        # remove point pairs that don't fit into gripper
+        grasp_points_score_all = self.filter_grasp_points_distance(grasp_points_score_all)
+
+        for grasp_points_score in grasp_points_score_all:
 
             # # display contour with line between grasp points
             # _ = plt.plot(contour[:, 0, 0], contour[:, 0, 1], 'b.',
-            #              [contour[grasp_points_idx[0]][0][0], contour[grasp_points_idx[1]][0][0]],
-            #              [contour[grasp_points_idx[0]][0][1], contour[grasp_points_idx[1]][0][1]], 'r-')
-            #
+            #              [point[0] for point in grasp_points_score['points']],
+            #              [point[1] for point in grasp_points_score['points']], 'r-')
             # plt.show()
 
-            self.evaluate_grasp_points_orientation(contour, grasp_points_idx)
+            grasp_points_score['orientation_err'], grasp_points_score['distance'] \
+                = self.evaluate_grasp_points_orientation(contour,
+                                                         grasp_points_score['idx'],
+                                                         grasp_points_score['distance'])
+
+            grasp_points_score['grasp_orientation'] = self.get_grasp_orientation(grasp_points_score['points'])
+
+            grasp_points_score['centroid_distance'] = self.get_centroid_distance(grasp_points_score['points'], centroid)
+
+
+
 
     @staticmethod
     def draw_contour(contour, img_size):
@@ -122,6 +139,28 @@ class ShapeAnalyzer:
         distance = ((grasp_center[0] - centroid[0])**2 + (grasp_center[1] - centroid[1])**2)**0.5
         return distance
 
+    def filter_grasp_points_distance(self, grasp_points_score):
+        """
+        removes grasp point pairs that are too distant to fit into gripper
+        """
+        # maximal extension of gripper jaws
+        grasp_size = 150
+        # holder for grasp points indexes list length, for efficiency reasons
+        grasp_points_idx_all_len = len(grasp_points_score)
+        i = 0
+        while i < grasp_points_idx_all_len:
+            point_pair = grasp_points_score[i]['points']
+            distance = self.get_points_distance(grasp_points_score[i]['points'])
+            if distance > grasp_size:
+                grasp_points_score.pop(i)
+                grasp_points_idx_all_len -= 1
+            else:
+                grasp_points_score[i]['distance'] = distance
+                i += 1
+        return grasp_points_score
+
+
+
     def get_points_distance(self, points):
         """
         returns distance between 2 given points
@@ -131,7 +170,7 @@ class ShapeAnalyzer:
 
     def get_grasp_orientation(self, points):
         """
-        returns grasp orientation in radians (-pi/2, pi/2]
+        returns scaled absolute value of grasp orientation in range [0, 1], where 0 is horizontal and 1 is vertical
         """
         line = (points[0][0] - points[1][0], points[0][1] - points[1][1])
         if line[0] == 0:
@@ -139,8 +178,9 @@ class ShapeAnalyzer:
             orientation = math.pi / 2
         else:
             # no need for atan2
-            orientation = math.atan(line[1] / line[0])
-        return orientation
+            orientation = abs(math.atan(line[1] / line[0]))
+        orientation_norm = orientation / (math.pi / 2)
+        return orientation_norm
 
     def scale_contour(self, contour, distance):
         """
@@ -160,7 +200,7 @@ class ShapeAnalyzer:
         f = (f_x + f_y) / 2
         return f
 
-    def evaluate_grasp_points_orientation(self, contour, grasp_points_idx):
+    def evaluate_grasp_points_orientation(self, contour, grasp_points_idx, distance):
         """
         evaluates curves surrounding given contour points for their orientation and potential grasp width change
         :return: total orientation error [0, 1], where 0 is perfectly fit to grasp
@@ -210,8 +250,6 @@ class ShapeAnalyzer:
 
                     curve_points_uv_new = np.insert(curve_points_uv_new, 0, point_last_uv, axis=0)
                     curve_points_uv_new = np.append(curve_points_uv_new, [point_first_uv], axis=0)
-                    # _ = plt.plot(curve_points_new[:, 0], curve_points_new[:, 1], 'b.')
-                    # plt.show()
 
                     # length of U axis points projection
                     curve_length = abs(curve_points_uv_new[len(curve_points_uv_new) - 1][0] - curve_points_uv_new[0][0])
@@ -267,7 +305,7 @@ class ShapeAnalyzer:
         # vector between given grasp points
         grasp_points_vector = p_1 - p_0
         # normalized grasp points vector (length = 1); not really necessary, but aesthetic
-        grasp_points_vector_norm = grasp_points_vector / self.get_points_distance((p_0, p_1))
+        grasp_points_vector_norm = grasp_points_vector / distance
 
         # get absolute orientation error of lines fit to curves about both grasp points
         # and additional grasp width due to curve shape
@@ -281,6 +319,7 @@ class ShapeAnalyzer:
         orientation_err = (orientation_err_0 + orientation_err_1) / math.pi
         # total grasp width update
         add_grasp_width = add_grasp_width_0 + add_grasp_width_1
+        return orientation_err, add_grasp_width
         
 
     def save(self, contour, grasp_points_idx_all):
