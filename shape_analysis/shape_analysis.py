@@ -58,10 +58,15 @@ class ShapeAnalyzer:
         # grasp_points_y = grasp_points[:, 0, 1]
         for i in range(len(grasp_points_idx_all)):
             grasp_points_idx = grasp_points_idx_all[i]
-            print(grasp_points_idx)
-            _ = plt.plot(contour[:, 0, 0], contour[:, 0, 1], 'b.', [contour[grasp_points_idx[0]][0][0], contour[grasp_points_idx[1]][0][0]], [contour[grasp_points_idx[0]][0][1], contour[grasp_points_idx[1]][0][1]], 'r-')
-            plt.show()
-            self.get_curves_orientation(contour, grasp_points_idx)
+
+            # # display contour with line between grasp points
+            # _ = plt.plot(contour[:, 0, 0], contour[:, 0, 1], 'b.',
+            #              [contour[grasp_points_idx[0]][0][0], contour[grasp_points_idx[1]][0][0]],
+            #              [contour[grasp_points_idx[0]][0][1], contour[grasp_points_idx[1]][0][1]], 'r-')
+            #
+            # plt.show()
+
+            self.evaluate_grasp_points_orientation(contour, grasp_points_idx)
 
     @staticmethod
     def draw_contour(contour, img_size):
@@ -155,11 +160,19 @@ class ShapeAnalyzer:
         f = (f_x + f_y) / 2
         return f
 
-    def get_curves_orientation(self, contour, grasp_points_idx):
+    def evaluate_grasp_points_orientation(self, contour, grasp_points_idx):
         """
-        returns mutual orientation of 2 curves about grasp points
+        evaluates curves surrounding given contour points for their orientation and potential grasp width change
+        :return: total orientation error [0, 1], where 0 is perfectly fit to grasp
+                 additional grasp width [mm] - a value to add to original grasp width
         """
-        def get_curve_line(contour, point_idx, grasp_vector):
+        def evaluate_grasp_point_orientation(contour, point_idx, grasp_vector):
+            """
+            fits line into curve surrounding given grasp point, checks it's orientation against gripper
+            and corrects grasp width
+            :return: fitted line absolute orientation error [0, pi/2]
+                     additional grasp width [mm]
+            """
             gripper_size = 20
 
             def get_curve_points():
@@ -201,7 +214,6 @@ class ShapeAnalyzer:
                     # plt.show()
 
                     # length of U axis points projection
-                    # COŚ CHYBA Z OSIĄ U JEST NIE TAK
                     curve_length = abs(curve_points_uv_new[len(curve_points_uv_new) - 1][0] - curve_points_uv_new[0][0])
                     # stop adding points when length of curve projection (onto gripper) is greater than gripper size
                     # or smaller than previous value (which happens when curve begins to close)
@@ -218,45 +230,58 @@ class ShapeAnalyzer:
             origin = (contour[point_idx][0])
             uv_coord_system = (u, v, origin)
 
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.set_aspect(aspect=1)
-            ax.plot([p_0[0], p_1[0]], [p_0[1], p_1[1]], 'b.',
-                    [origin[0], origin[0] + u[0]], [origin[1], origin[1] + u[1]], 'r-',
-                    [origin[0], origin[0] + v[0]], [origin[1], origin[1] + v[1]], 'g-')
-            plt.show()
+            # # display local coordinate system
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111)
+            # ax.set_aspect(aspect=1)
+            # ax.plot([p_0[0], p_1[0]], [p_0[1], p_1[1]], 'b.-',
+            #         [origin[0], origin[0] + u[0]], [origin[1], origin[1] + u[1]], 'r-',
+            #         [origin[0], origin[0] + v[0]], [origin[1], origin[1] + v[1]], 'g-')
+            # plt.show()
 
             # points to fit line to, in UV coordinate system
             curve_points = get_curve_points()
             # line fit to points (least squares method)
             line_coefficients = np.polyfit(curve_points[:, 0], curve_points[:, 1], 1)
 
-            line_eq = np.poly1d(line_coefficients)
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.set_aspect(aspect=1)
-            ax.plot(curve_points[:, 0], curve_points[:, 1], 'b.',
-                    [curve_points[0][0], curve_points[len(curve_points) - 1][0]],
-                    [line_eq(curve_points[0][0]), line_eq(curve_points[len(curve_points) - 1][0])], 'r-')
-            plt.show()
+            # # display line fit to curve in local coordinate system
+            # line_eq = np.poly1d(line_coefficients)
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111)
+            # ax.set_aspect(aspect=1)
+            # ax.plot(curve_points[:, 0], curve_points[:, 1], 'b.',
+            #         [curve_points[0][0], curve_points[len(curve_points) - 1][0]],
+            #         [line_eq(curve_points[0][0]), line_eq(curve_points[len(curve_points) - 1][0])], 'r-')
+            # plt.show()
 
-            # direction = math.copysign( curve_points[len(curve_points)][0] - curve_points[0][0]
-            return line_coefficients
+            # absolute error in fit line orientation [0, pi/2]
+            orientation_err = abs(math.atan(line_coefficients[0]))
+            # additional distance from given middle point to actual highest (in UV system) point of the curve
+            # used to correct grasp parameters
+            add_grasp_width = curve_points[:, 1].max()
+            return orientation_err, add_grasp_width
 
         # grasp points given by indexes
         p_0 = contour[grasp_points_idx[0]][0]
         p_1 = contour[grasp_points_idx[1]][0]
         # vector between given grasp points
         grasp_points_vector = p_1 - p_0
-        # normalized grasp points vector (length = 1)
+        # normalized grasp points vector (length = 1); not really necessary, but aesthetic
         grasp_points_vector_norm = grasp_points_vector / self.get_points_distance((p_0, p_1))
 
-        # get lines fit to curves about both grasp points,
+        # get absolute orientation error of lines fit to curves about both grasp points
+        # and additional grasp width due to curve shape
         # local coordinate system bonded with gripper is used for line fitting
-        # local coord sys. vertical axis points outward contour
-        line_0 = get_curve_line(contour, grasp_points_idx[0], -grasp_points_vector_norm)
-        line_1 = get_curve_line(contour, grasp_points_idx[1], grasp_points_vector_norm)
-
+        # local coord sys. vertical axis points outward contour, hence sign at grasp vector parameter
+        orientation_err_0, add_grasp_width_0 = evaluate_grasp_point_orientation(contour, grasp_points_idx[0],
+                                                                    -grasp_points_vector_norm)
+        orientation_err_1, add_grasp_width_1 = evaluate_grasp_point_orientation(contour, grasp_points_idx[1],
+                                                                    grasp_points_vector_norm)
+        # total orientation error, scaled to [0, 1] range for easier weight setting
+        orientation_err = (orientation_err_0 + orientation_err_1) / math.pi
+        # total grasp width update
+        add_grasp_width = add_grasp_width_0 + add_grasp_width_1
+        
 
     def save(self, contour, grasp_points_idx_all):
         np.savez_compressed('shape_analysis', contour=contour, grasp_points_idx_all=grasp_points_idx_all)
