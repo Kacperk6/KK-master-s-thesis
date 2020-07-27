@@ -19,10 +19,11 @@ class ShapeAnalyzer:
 
     def make_contour(self, mask, distance):
         """
-        returns countour of a given mask
+        returns contour of a given mask
         mask has to be uniform, without multiple blobs
-        :param mask: can be boolean
-        :return: contour - OpenCV contour; list of contour points locations (x, y)
+        :param mask: shape to analyze, can be boolean
+        :param distance: distance to object in Z axis; for scaling purpose
+        :return: contour - OpenCV contour; list of contour points locations (x, y), scaled to millimeters
         """
         def get_largest_contour(contours):
             """
@@ -34,61 +35,131 @@ class ShapeAnalyzer:
                 if cv2.contourArea(contour) > largest_area:
                     largest_contour = contour
             return largest_contour
+
         mask = mask.astype('uint8')
+        # get contour of a given mask
         contours, _ = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        # handle multiple contours (vary rare case)
         if len(contours) == 1:
             contour = contours[0]
         else:
             contour = get_largest_contour(contours)
+        # decrease number of contour points (uniformly) to decrease computational load
         contour = self.decimate_contour(contour)
+        # scale contour point locations from pixels to real size millimeters
         contour = self.scale_contour(contour, distance)
+        # store contour parameters for further use
         self.get_contour_parameters(contour)
         return contour
 
     def analyze_shape(self, mask, distance):
+        # get a contour to analyze
         contour = self.make_contour(mask, distance)
+        # draw contour; real scale in millimeters
         self.draw_contour(contour, (int(mask.shape[0]*self.size_factor), int(mask.shape[1]*self.size_factor)))
-        grasp_points_idx_all = self.get_grasp_points_idx(contour)
-        self.save(contour, grasp_points_idx_all)
-        for i in range(len(grasp_points_idx_all)):
-            pass
 
-    def analyze_shape_test(self):
-        contour, grasp_points_idx_all = self.load_data()
-        centroid = self.centroid
+        # get index pairs of all contour points making potential grasp pairs
+        grasp_points_idx_all = self.get_grasp_points_idx(contour)
 
         # list to store grasp point pairs and all their scores of different categories
-        grasp_points_score_all = []
+        grasp_points_dict_list = []
         # individual list elements as dictionaries
         for grasp_points_idx in grasp_points_idx_all:
-            grasp_points_score_all.append({'points': (contour[grasp_points_idx[0]][0], contour[grasp_points_idx[1]][0]),
+            grasp_points_dict_list.append({'points': (contour[grasp_points_idx[0]][0], contour[grasp_points_idx[1]][0]),
                                            'idx': grasp_points_idx})
 
+        #self.save(contour, grasp_points_idx_all)
+
         # remove point pairs which lie on the ground, therefore are inaccessible
-        grasp_points_score_all = self.filter_bottom_points(grasp_points_score_all)
+        grasp_points_dict_list = self.filter_bottom_points(grasp_points_dict_list)
+
+        # get distances between each point pair
+        for grasp_points_dict in grasp_points_dict_list:
+            grasp_points_dict['distance'] = self.get_points_distance(grasp_points_dict['points'])
+
         # remove point pairs that don't fit into gripper
-        grasp_points_score_all = self.filter_grasp_points_distance(grasp_points_score_all)
+        grasp_points_dict_list = self.filter_grasp_points_distance(grasp_points_dict_list)
 
-        for grasp_points_score in grasp_points_score_all:
-            grasp_points_score['surface_orientation'], grasp_points_score['distance'] \
+        # compute scores for different categories for each point pair
+        centroid = self.centroid
+        for grasp_points_dict in grasp_points_dict_list:
+            grasp_points_dict['surface_orientation'], grasp_points_dict['distance'] \
                 = self.evaluate_grasp_points_orientation(contour,
-                                                         grasp_points_score['idx'],
-                                                         grasp_points_score['distance'])
+                                                         grasp_points_dict['idx'],
+                                                         grasp_points_dict['distance'])
 
-            grasp_points_score['grasp_orientation'] = self.get_grasp_orientation(grasp_points_score['points'])
+            grasp_points_dict['grasp_orientation'] = self.get_grasp_orientation(grasp_points_dict['points'])
 
-            grasp_points_score['inertia'] = self.get_inertia(grasp_points_score['points'], centroid)
+            grasp_points_dict['inertia'] = self.get_inertia(grasp_points_dict['points'], centroid)
 
         # apply weights to scores
         weights = self.weights
         scores = []
-        for grasp_points_score in grasp_points_score_all:
+        for grasp_points_dict in grasp_points_dict_list:
             score = 0
             for key in weights:
-                score += grasp_points_score[key] * weights[key]
+                score += grasp_points_dict[key] * weights[key]
             scores.append(score)
         # get point pair with lowest (best) score
-        grasp_points_winner = grasp_points_score_all[np.argmin(scores)]
+        grasp_points_winner = grasp_points_dict_list[np.argmin(scores)]
+
+        # display contour with line between winner grasp points
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_aspect(aspect=1)
+        ax.invert_yaxis()
+        ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'b.',
+                [point[0] for point in grasp_points_winner['points']],
+                [point[1] for point in grasp_points_winner['points']], 'r-')
+        plt.show()
+
+        grasp_parameters = self.get_grasp_parameters(grasp_points_winner, distance)
+        return grasp_parameters
+
+    def analyze_shape_test(self):
+        contour, grasp_points_idx_all = self.load_data()
+
+        # list to store grasp point pairs and all their scores of different categories
+        grasp_points_dict_list = []
+        # individual list elements as dictionaries
+        for grasp_points_idx in grasp_points_idx_all:
+            grasp_points_dict_list.append({'points': (contour[grasp_points_idx[0]][0], contour[grasp_points_idx[1]][0]),
+                                           'idx': grasp_points_idx})
+
+        # self.save(contour, grasp_points_idx_all)
+
+        # remove point pairs which lie on the ground, therefore are inaccessible
+        grasp_points_dict_list = self.filter_bottom_points(grasp_points_dict_list)
+
+        # get distances between each point pair
+        for grasp_points_dict in grasp_points_dict_list:
+            grasp_points_dict['distance'] = self.get_points_distance(grasp_points_dict['points'])
+
+        # remove point pairs that don't fit into gripper
+        grasp_points_dict_list = self.filter_grasp_points_distance(grasp_points_dict_list)
+
+        # compute scores for different categories for each point pair
+        centroid = self.centroid
+        for grasp_points_dict in grasp_points_dict_list:
+            grasp_points_dict['surface_orientation'], grasp_points_dict['distance'] \
+                = self.evaluate_grasp_points_orientation(contour,
+                                                         grasp_points_dict['idx'],
+                                                         grasp_points_dict['distance'])
+
+            grasp_points_dict['grasp_orientation'] = self.get_grasp_orientation(grasp_points_dict['points'])
+
+            grasp_points_dict['inertia'] = self.get_inertia(grasp_points_dict['points'], centroid)
+
+        # apply weights to scores
+        weights = self.weights
+        scores = []
+        for grasp_points_dict in grasp_points_dict_list:
+            score = 0
+            for key in weights:
+                score += grasp_points_dict[key] * weights[key]
+            scores.append(score)
+        # get point pair with lowest (best) score
+        grasp_points_winner = grasp_points_dict_list[np.argmin(scores)]
 
         # display contour with line between winner grasp points
         fig = plt.figure()
@@ -168,12 +239,11 @@ class ShapeAnalyzer:
         i = 0
         while i < grasp_points_idx_all_len:
             point_pair = grasp_points_score_all[i]['points']
-            distance = self.get_points_distance(grasp_points_score_all[i]['points'])
+            distance = grasp_points_score_all[i]['distance']
             if distance > grasp_size:
                 grasp_points_score_all.pop(i)
                 grasp_points_idx_all_len -= 1
             else:
-                grasp_points_score_all[i]['distance'] = distance
                 i += 1
         return grasp_points_score_all
 
@@ -365,6 +435,22 @@ class ShapeAnalyzer:
         grasp_points_idx_all = data['grasp_points_idx_all']
         self.get_contour_parameters(contour)
         return contour, grasp_points_idx_all
+
+    def get_grasp_parameters(self, points, distance):
+        """
+        returns grasp parameters for given point pair
+        :param points: grasp point pair dict
+        :param distance: distance to point pair in Z axis
+        :return: midpoint - middle point of grasp (x, y, z) in millimeters
+                 orientation - orientation of gripper vs horizontal plane
+                 width - needed width of grasp
+        """
+        point_0 = points['points'][0]
+        point_1 = points['points'][1]
+        midpoint = ((point_0[0] + point_1[0])/2, (point_0[1] + point_1[1])/2, distance)
+        orientation = points['orientation']
+        width = points['distance']
+        return midpoint, orientation, width
 
 
 shape_analyzer = ShapeAnalyzer(None)
