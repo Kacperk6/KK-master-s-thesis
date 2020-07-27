@@ -8,6 +8,9 @@ class ShapeAnalyzer:
     def __init__(self, cam_mat):
         self.centroid = None
         self.cont_len = None
+        self.x, self.y, self.width, self.height = None, None, None, None
+
+        self.weights = {'surface_orientation': 1.0, 'inertia': 0.5, 'grasp_orientation': 0.2}
 
         # focal length of a camera in px, used for pixel-millimeter conversion
         # self.cam_focal_length = self.get_camera_focal_length(cam_mat)
@@ -61,29 +64,41 @@ class ShapeAnalyzer:
             grasp_points_score_all.append({'points': (contour[grasp_points_idx[0]][0], contour[grasp_points_idx[1]][0]),
                                            'idx': grasp_points_idx})
 
-
+        # remove point pairs which lie on the ground, therefore are inaccessible
+        grasp_points_score_all = self.filter_bottom_points(grasp_points_score_all)
         # remove point pairs that don't fit into gripper
         grasp_points_score_all = self.filter_grasp_points_distance(grasp_points_score_all)
 
         for grasp_points_score in grasp_points_score_all:
-
-            # # display contour with line between grasp points
-            # _ = plt.plot(contour[:, 0, 0], contour[:, 0, 1], 'b.',
-            #              [point[0] for point in grasp_points_score['points']],
-            #              [point[1] for point in grasp_points_score['points']], 'r-')
-            # plt.show()
-
-            grasp_points_score['orientation_err'], grasp_points_score['distance'] \
+            grasp_points_score['surface_orientation'], grasp_points_score['distance'] \
                 = self.evaluate_grasp_points_orientation(contour,
                                                          grasp_points_score['idx'],
                                                          grasp_points_score['distance'])
 
             grasp_points_score['grasp_orientation'] = self.get_grasp_orientation(grasp_points_score['points'])
 
-            grasp_points_score['centroid_distance'] = self.get_centroid_distance(grasp_points_score['points'], centroid)
+            grasp_points_score['inertia'] = self.get_inertia(grasp_points_score['points'], centroid)
 
+        # apply weights to scores
+        weights = self.weights
+        scores = []
+        for grasp_points_score in grasp_points_score_all:
+            score = 0
+            for key in weights:
+                score += grasp_points_score[key] * weights[key]
+            scores.append(score)
+        # get point pair with lowest (best) score
+        grasp_points_winner = grasp_points_score_all[np.argmin(scores)]
 
-
+        # display contour with line between winner grasp points
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_aspect(aspect=1)
+        ax.invert_yaxis()
+        ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'b.',
+                [point[0] for point in grasp_points_winner['points']],
+                [point[1] for point in grasp_points_winner['points']], 'r-')
+        plt.show()
 
     @staticmethod
     def draw_contour(contour, img_size):
@@ -106,6 +121,7 @@ class ShapeAnalyzer:
         # contour centroid (c_x, c_y)
         self.centroid = (int(M['m10']/M['m00']), int(M['m01']/M['m00']))
         self.cont_len = len(contour)
+        self.x, self.y, self.width, self.height = cv2.boundingRect(contour)
 
     def decimate_contour(self, contour):
         """
@@ -128,38 +144,56 @@ class ShapeAnalyzer:
                 grasp_points_idx.append((i, j))
         return grasp_points_idx
 
-    def get_centroid_distance(self, points, centroid):
+    def get_inertia(self, points, centroid):
         """
-        returns distance between center of grasp and object centroid
+        returns relative inertia momentum, i.e. (just) quadratic distance between grasp center point
+        and contour centroid; normalized, so reaches 1 at distance of 100 mm (value rises with distance^2)
         :param points: pair of points (x,y) (tuple or list) defining grasp points
         :param centroid: contour centroid (x,y)
         """
 
         grasp_center = ((points[0][0] + points[1][0])/2, (points[0][1] + points[1][1])/2)
-        distance = ((grasp_center[0] - centroid[0])**2 + (grasp_center[1] - centroid[1])**2)**0.5
-        return distance
+        inertia = ((grasp_center[0] - centroid[0])**2 + (grasp_center[1] - centroid[1])**2)
+        inertia_norm = inertia / 10000
+        return inertia_norm
 
-    def filter_grasp_points_distance(self, grasp_points_score):
+    def filter_grasp_points_distance(self, grasp_points_score_all):
         """
         removes grasp point pairs that are too distant to fit into gripper
         """
         # maximal extension of gripper jaws
         grasp_size = 150
         # holder for grasp points indexes list length, for efficiency reasons
-        grasp_points_idx_all_len = len(grasp_points_score)
+        grasp_points_idx_all_len = len(grasp_points_score_all)
         i = 0
         while i < grasp_points_idx_all_len:
-            point_pair = grasp_points_score[i]['points']
-            distance = self.get_points_distance(grasp_points_score[i]['points'])
+            point_pair = grasp_points_score_all[i]['points']
+            distance = self.get_points_distance(grasp_points_score_all[i]['points'])
             if distance > grasp_size:
-                grasp_points_score.pop(i)
+                grasp_points_score_all.pop(i)
                 grasp_points_idx_all_len -= 1
             else:
-                grasp_points_score[i]['distance'] = distance
+                grasp_points_score_all[i]['distance'] = distance
                 i += 1
-        return grasp_points_score
+        return grasp_points_score_all
 
-
+    def filter_bottom_points(self, grasp_points_score_all):
+        """
+        removes grasp point pairs, where at least one point lies on the ground (given horizontal camera orientation),
+        therefore is inaccessible
+        """
+        # height threshold below which point pairs are filtered out (y axis points down
+        height_thresh = self.y + self.height * 0.9
+        grasp_points_idx_all_len = len(grasp_points_score_all)
+        i = 0
+        while i < grasp_points_idx_all_len:
+            points = grasp_points_score_all[i]['points']
+            if points[0][1] > height_thresh or points[0][1] > height_thresh:
+                grasp_points_score_all.pop(i)
+                grasp_points_idx_all_len -= 1
+            else:
+                i += 1
+        return grasp_points_score_all
 
     def get_points_distance(self, points):
         """
