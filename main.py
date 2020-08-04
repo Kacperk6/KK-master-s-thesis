@@ -5,6 +5,7 @@ import logging
 from yolact1.yolact_facade import YolactFacade
 from localization.stereo_vision import StereoVision
 from utils import camera
+from utils import task_functions
 from yolact1.data.config import COCO_CLASSES
 from shape_analysis.shape_analysis import ShapeAnalyzer
 
@@ -28,9 +29,6 @@ class UI:
         # how many left pixels to cut from interface image to fit stereo vision output data
         self.img_cut_size = self.stereo_vision.minDisparity + self.stereo_vision.numDisparities
 
-        cv2.namedWindow("interface")
-        cv2.setMouseCallback("interface", self.get_mouse_position)
-
         # whether to show Open3D scene visualization
         self.show_3d_model = True
 
@@ -42,6 +40,9 @@ class UI:
 
         # whether update interface image
         self.update = True
+
+        cv2.namedWindow("interface")
+        cv2.setMouseCallback("interface", self.get_mouse_position)
 
         # mouse callback parameters holders
         self.is_mouse_called = False
@@ -103,7 +104,9 @@ class UI:
                         object_3d = self.stereo_vision.mask_3d(mask, scene_3d, disparity_map, img_l,
                                                                self.show_3d_model)
                         position = self.stereo_vision.get_object_position(object_3d)
-                        contour = self.shape_analyzer.analyze_shape(mask, position[2])
+                        print("poistion: ", position)
+                        grasp_parameters = self.shape_analyzer.analyze_shape(mask, position[2])
+                        print("grasp_parameters: ", grasp_parameters)
                     else:
                         logging.info("no detected object at given point")
             elif self.mode == 2:
@@ -115,7 +118,8 @@ class UI:
                     self.is_mouse_called = False
                     #np.savez_compressed("points_3d_ground", scene_3d=scene_3d, disparity_map=disparity_map, img=img_l)
                     point = scene_3d[self.mouse_y][self.mouse_x]
-                    print(self.stereo_vision.is_point_reachable(scene_3d, point))
+                    print("point: ", point)
+                    print(task_functions.is_point_reachable(scene_3d, point))
 
 
         logging.info("shutting down")
@@ -132,38 +136,6 @@ class UI:
         if event == cv2.EVENT_LBUTTONDBLCLK:
             self.is_mouse_called = True
             self.mouse_x, self.mouse_y = x, y
-
-    def choose_object_at_point(self, x, y, cats, bboxes, masks):
-        """
-        returns index of detected object at given image point, smallest one in case of multiple objects at point
-        :param x: x (horizontal) point value
-        :param y: y (vertical) point value
-        :param cats: np.array of detected objects categories
-        :param bboxes: np.array of detected objects bounding boxes
-        :param masks: np.array of detected objects masks
-        :return: index of smallest object at point from array of detected objects (e.g. self.mask),
-                 None if no objects at point
-        """
-        all_objects_at_point_idx = []
-        for i in range(len(cats)):
-            if masks[i][y][x]:
-                all_objects_at_point_idx.append(i)
-        if len(all_objects_at_point_idx) == 0:
-            return None
-        elif len(all_objects_at_point_idx) == 1:
-            object_at_point_idx = all_objects_at_point_idx[0]
-        else:
-            w = bboxes[all_objects_at_point_idx[0]][2] - bboxes[all_objects_at_point_idx[0]][0]
-            h = bboxes[all_objects_at_point_idx[0]][3] - bboxes[all_objects_at_point_idx[0]][1]
-            smallest_object_size = w * h
-            object_at_point_idx = all_objects_at_point_idx[0]
-            for i in range(1, len(all_objects_at_point_idx)):
-                w = bboxes[all_objects_at_point_idx[i]][2] - bboxes[all_objects_at_point_idx[i]][0]
-                h = bboxes[all_objects_at_point_idx[i]][3] - bboxes[all_objects_at_point_idx[i]][1]
-                object_size = w * h
-                if object_size < smallest_object_size:
-                    object_at_point_idx = i
-        return object_at_point_idx
 
     def resize_mask(self, mask, size):
         mask_resized = np.zeros(size, np.bool)
