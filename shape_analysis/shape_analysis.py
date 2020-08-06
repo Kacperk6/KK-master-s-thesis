@@ -46,22 +46,13 @@ class ShapeAnalyzer:
             contour = contours[0]
         else:
             contour = get_largest_contour(contours)
-        # # display contour with line between winner grasp points
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111)
-        # ax.set_aspect(aspect=1)
-        # ax.invert_yaxis()
-        # ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
-        # plt.show()
-        # decrease number of contour points (uniformly) to decrease computational load
-        contour = self.decimate_contour(contour)
-        # # display contour with line between winner grasp points
-        # fig = plt.figure()
-        # ax = fig.add_subplot(111)
-        # ax.set_aspect(aspect=1)
-        # ax.invert_yaxis()
-        # ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
-        # plt.show()
+        # display contour with line between winner grasp points
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_aspect(aspect=1)
+        ax.invert_yaxis()
+        ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
+        plt.show()
         # scale contour point locations from pixels to real size millimeters
         contour = self.scale_contour(contour, position)
         # # display contour with line between winner grasp points
@@ -71,6 +62,15 @@ class ShapeAnalyzer:
         # ax.invert_yaxis()
         # ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
         # plt.show()
+        # decrease number of contour points (uniformly) to decrease computational load
+        contour = self.decimate_contour(contour)
+        # display contour with line between winner grasp points
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.set_aspect(aspect=1)
+        ax.invert_yaxis()
+        ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
+        plt.show()
         # store contour parameters for further use
         self.get_contour_parameters(contour)
         return contour
@@ -101,6 +101,8 @@ class ShapeAnalyzer:
 
         # remove point pairs that don't fit into gripper
         grasp_points_dict_list = self.filter_grasp_points_distance(grasp_points_dict_list)
+        if len(grasp_points_dict_list) == 0:
+            return None, None, None
 
         # compute scores for different categories for each point pair
         centroid = self.centroid
@@ -163,13 +165,28 @@ class ShapeAnalyzer:
         self.cont_len = len(contour)
         self.x, self.y, self.width, self.height = cv2.boundingRect(contour)
 
-    @staticmethod
-    def decimate_contour(contour):
+    def decimate_contour(self, contour):
         """
+        if average distance between contour points is smaller than min_point_distance,
         reduces number of contour points uniformly
         """
-        sample_rate = 4
-        return contour[::sample_rate]
+        min_point_distance = 4
+
+        def get_avg_point_distance(contour):
+            distance = 0
+            num_samples = len(contour) - 1
+            for i in range(num_samples):
+                points = (contour[i][0], contour[i+1][0])
+                distance += self.get_points_distance(points)
+            avg_distance = distance / num_samples
+            return avg_distance
+
+        avg_distance = get_avg_point_distance(contour)
+        if avg_distance < min_point_distance:
+            sample_rate = int(min_point_distance / avg_distance)
+            if sample_rate != 0:
+                contour = contour[::sample_rate]
+        return contour
 
     def get_grasp_points_idx(self):
         """
