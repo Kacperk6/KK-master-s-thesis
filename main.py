@@ -30,7 +30,8 @@ class UI:
         self.img_cut_size = self.stereo_vision.minDisparity + self.stereo_vision.numDisparities
 
         # whether to show Open3D scene visualization
-        self.show_3d_model = True
+        self.show_3d_model = False
+
 
         # action to perform
         # 0 - just image transmission
@@ -93,11 +94,11 @@ class UI:
                     self.update = False
                 if self.is_mouse_called and not self.update:
                     self.is_mouse_called = False
-                    object_idx = self.choose_object_at_point(self.mouse_x, self.mouse_y, cats, bboxes, masks)
+                    object_idx = task_functions.choose_object_at_point(self.mouse_x, self.mouse_y, cats, bboxes, masks)
                     if object_idx is not None:
                         logging.info("chosen object: {}".format(COCO_CLASSES[cats[object_idx]]))
                         scene_3d, disparity_map = self.stereo_vision.get_3d_scene(img_l, img_r, self.show_3d_model)
-                        # disparity_map_img = disparity_map / 2048
+                        # disparity_map_img = disparity_map / 128
                         # cv2.imshow("disparity", disparity_map_img)
                         # cv2.imshow("image", img_l)
                         mask = self.resize_mask(masks[object_idx], (img_l.shape[0], img_l.shape[1]))
@@ -105,7 +106,7 @@ class UI:
                                                                self.show_3d_model)
                         position = self.stereo_vision.get_object_position(object_3d)
                         print("poistion: ", position)
-                        grasp_parameters = self.shape_analyzer.analyze_shape(mask, position[2])
+                        grasp_parameters = self.shape_analyzer.analyze_shape(mask, position)
                         print("grasp_parameters: ", grasp_parameters)
                     else:
                         logging.info("no detected object at given point")
@@ -113,11 +114,13 @@ class UI:
                 if self.update:
                     logging.info("mapping scene")
                     scene_3d, disparity_map = self.stereo_vision.get_3d_scene(img_l, img_r, self.show_3d_model)
+                    # disparity_map_img = disparity_map / 128
+                    # cv2.imshow("disparity", disparity_map_img)
                     self.update = False
                 if self.is_mouse_called and not self.update:
                     self.is_mouse_called = False
                     #np.savez_compressed("points_3d_ground", scene_3d=scene_3d, disparity_map=disparity_map, img=img_l)
-                    point = scene_3d[self.mouse_y][self.mouse_x]
+                    point = scene_3d[self.mouse_y][self.mouse_x + + self.img_cut_size]
                     print("point: ", point)
                     print(task_functions.is_point_reachable(scene_3d, point))
 

@@ -78,7 +78,7 @@ class YolactFacade:
             preds = self.net(batch)
 
             # You can modify the score threshold to your liking
-            cats, scores, boxes, masks = postprocess(preds, w, h, score_threshold=0.7)
+            cats, scores, boxes, masks = postprocess(preds, w, h, score_threshold=0.5)
             if len(cats) == 0:
                 return None, None, None, None
             # changed predicted data to cpu numpy array type to further process

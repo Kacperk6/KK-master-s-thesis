@@ -56,13 +56,13 @@ class StereoVision:
             self.calibrate_stereo_matcher()
 
     def get_3d_scene(self, img_l, img_r, show_3d_model=False):
-        MIN_DISPARITY = 20
+        MIN_DISPARITY = 5
         img_l_gray = cv2.cvtColor(img_l, cv2.COLOR_BGR2GRAY)
         img_r_gray = cv2.cvtColor(img_r, cv2.COLOR_BGR2GRAY)
         disparity_map = self.stereo.compute(img_l_gray, img_r_gray)
-        disparity_map[disparity_map < MIN_DISPARITY] = disparity_map.min()
         # scale disparity map
         disparity_map = (disparity_map / 16).astype('float32')
+        disparity_map[disparity_map < MIN_DISPARITY] = disparity_map.min()
         points_3d = cv2.reprojectImageTo3D(disparity_map, self.Q)
         if show_3d_model:
             self.draw_point_cloud(points_3d, disparity_map, img_l)
