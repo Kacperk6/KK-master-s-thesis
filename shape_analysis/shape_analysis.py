@@ -19,6 +19,9 @@ class ShapeAnalyzer:
             # just for tests. and this number is real xD
             self.cam_focal_length = 420.3396289938836
 
+        # interactive matplotlib mode to show same window multiple times
+        plt.ion()
+
     def make_contour(self, mask, position):
         """
         returns contour of a given mask
@@ -46,13 +49,13 @@ class ShapeAnalyzer:
             contour = contours[0]
         else:
             contour = get_largest_contour(contours)
-        # display contour with line between winner grasp points
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.set_aspect(aspect=1)
-        ax.invert_yaxis()
-        ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
-        plt.show()
+        # # display contour with line between winner grasp points
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111)
+        # ax.set_aspect(aspect=1)
+        # ax.invert_yaxis()
+        # ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
+        # plt.show()
         # scale contour point locations from pixels to real size millimeters
         contour = self.scale_contour(contour, position)
         # # display contour with line between winner grasp points
@@ -64,13 +67,13 @@ class ShapeAnalyzer:
         # plt.show()
         # decrease number of contour points (uniformly) to decrease computational load
         contour = self.decimate_contour(contour)
-        # display contour with line between winner grasp points
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        ax.set_aspect(aspect=1)
-        ax.invert_yaxis()
-        ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
-        plt.show()
+        # # display contour with line between winner grasp points
+        # fig = plt.figure()
+        # ax = fig.add_subplot(111)
+        # ax.set_aspect(aspect=1)
+        # ax.invert_yaxis()
+        # ax.plot(contour[:, 0, 0], contour[:, 0, 1], 'k.')
+        # plt.show()
         # store contour parameters for further use
         self.get_contour_parameters(contour)
         return contour
@@ -195,7 +198,7 @@ class ShapeAnalyzer:
         grasp_points_idx = []
         # make local variable for speed
         cont_len = self.cont_len
-        min_pair_distance = int(cont_len / 5)
+        min_pair_distance = int(cont_len / 4)
 
         for i in range(cont_len - min_pair_distance):
             for j in range(i + min_pair_distance, min((cont_len, i + cont_len - min_pair_distance + 1))):
@@ -466,7 +469,7 @@ class ShapeAnalyzer:
         point_0 = points['points'][0]
         point_1 = points['points'][1]
         midpoint = ((point_0[0] + point_1[0])/2, (point_0[1] + point_1[1])/2, distance)
-        orientation = points['grasp_orientation'] * (math.pi / 2)
+        orientation = math.atan((point_1[1] - point_0[1]) / (point_1[0] - point_0[0]))
         width = points['distance']
         return midpoint, orientation, width
 
